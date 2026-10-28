@@ -1,193 +1,74 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Project = {
   group: string;
   title: string;
   students: string[];
-  teacher: string;
   feasibility?: string;
   architecture?: string;
   report?: string;
   virtualLab?: string;
 };
 
-const projects: Project[] = [
-  {
-    group: "01",
-    title: "LSM-Tree Storage Engine over Object Storage",
-    students: ["Bhagyashri Joshi", "Neha Karkhanis"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/1b9e-8tFBF5M9lhGAKXHlwbCBg1pNyvCf9SBbhOrw9hI/edit?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/1Vk6XvulD0rJfJaQTzs5rRWz8ltBxa8W7/view?usp=sharing",
-    virtualLab:
-      "https://breakscale.tech/?s=7DHFQBUjGAB2bg#k=HbL_86S-uT1mHvZxmnXarg",
-  },
-  {
-    group: "04",
-    title: "Geo-Distributed Active-Active Cache Cluster",
-    students: ["Talha Mulani", "Meet Phulwani"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/1xlVBZT3XgxLM7UXHq5mye7iApNcn-CGL/edit?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/1CC05rXr5k7orGQVX-XmGTI_SlvZrxx9-/view?usp=sharing",
-  },
-  {
-    group: "07",
-    title: "Resilient Distributed DAG Orchestrator",
-    students: ["James Lijo", "Sahil Mirchandani"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://drive.google.com/file/d/1MVIz1jLhWqcLD3wlKXRI4MdD8fgS1ARf/view?usp=drive_link",
-    architecture:
-      "https://drive.google.com/file/d/1W2n91UqKs2RwjkKaoVYXtevYcvjxlmG_/view?usp=sharing",
-    report:
-      "https://drive.google.com/file/d/1XZXDW2RqvJaAcsZqVx5XNrctonlNtpxx/view?usp=sharing",
-    virtualLab:
-      "https://breakscale.tech/?s=E0QnnCDNy5Zwyw#k=D2xDtaOuKYvAh9Pgekhb5Q",
-  },
-  {
-    group: "11",
-    title: "Partitioned Distributed Commit Log Broker",
-    students: ["Khyati Keswani", "Malika Makhija"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://drive.google.com/file/d/1dGKuJXV0st1P5ULF7mkhme3GMgSTwlr5/view?usp=drive_link",
-    architecture:
-      "https://drive.google.com/file/d/1P6ltb-QM1K8URj9gsBoDBO8uVgMdZb7r/view?usp=sharing",
-    virtualLab:
-      "https://breakscale.tech/?s=ONSaLW1Tvnn6yQ#k=wXejaT3IKGpTQSRm1xNIuw",
-  },
-  {
-    group: "13",
-    title: "Fault-Tolerant Distributed Lock Service",
-    students: ["Tanmay Maniyar"],
-    teacher: "Not specified",
-    feasibility:
-      "https://docs.google.com/document/d/1iK6x0Zn9DDbzwQbUOHZ8cLAWaGbyYf2Y/edit?usp=drive_link",
-    architecture:
-      "https://drive.google.com/file/d/1NMduRQRmXzq6Xg1Oi8BfEkEZqFKH7RgN/view?usp=drive_link",
-    report:
-      "https://docs.google.com/document/d/1Nl58mQnrpQKWJepbur7oCiy3yXutJN_P/edit?usp=drive_link",
-    virtualLab:
-      "https://breakscale.tech/?s=OsbAtSQculCR3g#k=SANvrbY39og94EKZuwnIjg",
-  },
-  {
-    group: "13",
-    title: "Fault-Tolerant Distributed Lock Service",
-    students: ["Prathamesh", "Chandrabhanu"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/1gQn1SJjVz_v0hdvlVOLwRQXZZ3D3nYXZQ4Ts7RVdVas/edit?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/1jfXwhRW-RrI2YEH9lwEmIcAs3WilLrAP/view?usp=sharing",
-    report:
-      "https://docs.google.com/document/d/19e05Ohx_smSj2kcMIw0ypqgJqH0Son6NAs-gpp8cyMY/edit?usp=sharing",
-    virtualLab:
-      "https://breakscale.tech/?s=ccWDYrnjafwMuQ#k=pfZZaDLN-aqbWrJ_WDIx9Q",
-  },
-  {
-    group: "14",
-    title: "Real-Time Pub/Sub WebSocket Gateway",
-    students: ["Mahek Ahuja", "Piyush Kandhari"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://drive.google.com/file/d/1vKTBr8x5LF2efReGxMmRgghAc4X5bR9i/view?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/1BE40CsGue0Hxn0wq0kwGlFIQJYRwMyzd/view?usp=sharing",
-    report:
-      "https://drive.google.com/file/d/1Q8xvZ1zMeTJrD3oc36DiKa9QoeH4zYX0/view?usp=sharing",
-    virtualLab: "https://socketlab.vercel.app/",
-  },
-  {
-    group: "15",
-    title: "Exactly-Once Event De-duplication Engine",
-    students: ["Mohit Kotwal", "Aayush Jadhav"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/1BnQiuDVj6fFc1ZoKKsC023UOpLcO3IzfSSNzpFb4e7k/edit?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/18Kqnk3crL2F-FmQx8j9XzHihQ8t8EGWs/view?usp=sharing",
-    virtualLab:
-      "https://mohitto099.github.io/Exactly-Once-Event-Deduplication-Engine/",
-  },
-  {
-    group: "18",
-    title: "Tiered Edge Caching Hierarchy with Request Collapsing and Origin",
-    students: ["Lochna Paryani", "Sanika Mejari"],
-    teacher: "Richard Sir",
-    feasibility:
-      "https://drive.google.com/file/d/14zhe_PiOGH2-FxMXkJynCXY_sXfnkWPT/view?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/1KWVpoeZZV0P4XxXlGheU5oimaXGflNGf/view?usp=sharing",
-    report:
-      "https://drive.google.com/file/d/10wlkaKd1vmg2Jw6SkIKeDySpg_3a5gJ/view?usp=sharing",
-    virtualLab: "https://edge-cdn-virtual-lab.netlify.app/",
-  },
-  {
-    group: "19",
-    title: "Chunk-Level Storage Deduplication Engine",
-    students: ["Krishna Lohana", "Neilsen Vaz"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/1KFSip_EB7tz5ztQ7EkOaIcsvdwhkc3C4/edit?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/19pU4ncwBBnCS_F8lgzTmoIa6vX7E-3dz/view?usp=sharing",
-    report:
-      "https://docs.google.com/document/d/1ILAsJjsTJiZc2KhQSJz-QSGSm6m-gHQMO3HsdlvzthM/edit?usp=sharing",
-    virtualLab:
-      "https://breakscale.tech/?s=8pMPySiOi5Qvig#k=l_HoBkc_QEt1gATdX9E41A",
-  },
-  {
-    group: "23",
-    title: "Multi-Region Active-Passive Failover Controller",
-    students: ["Darshan Kankekar", "Chetna Ramnani"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/1-HQtsyxuGASATk2lWnf5EmMkrWLioDoz/edit?usp=sharing",
-    architecture:
-      "https://drive.google.com/file/d/1x9RCr8nuUdJlr2WVoRHr36yF9s4RTO8a/view?usp=sharing",
-    report:
-      "https://docs.google.com/document/d/1iUFXhmog2gW-QbiF5B4LrFDJb-OA6Jdn/edit?usp=sharing",
-    virtualLab: "https://failoverlab.netlify.app/",
-  },
-  {
-    group: "25",
-    title: "Distributed Log Aggregator & Indexer",
-    students: ["Jeegnasa Makwana", "Leena Chavan"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/1Vg1dLyh-8b7j62pyqKn7ZelyUNWSlmbJ/edit?usp=drive_link",
-    architecture:
-      "https://drive.google.com/file/d/1QdrgLIpxEx1bNztyRYogkfWjA9PIMaHu/view?usp=drive_link",
-    report:
-      "https://docs.google.com/document/d/10Lp3OmW-A1xN_UBi13aPIMUfGGB8FqXy/edit?usp=drive_link",
-    virtualLab:
-      "https://breakscale.tech/?s=jZRH_cpv35twVQ#k=DH7cEolTXlKc3MgUgEmWGQ",
-  },
-  {
-    group: "34",
-    title: "Cross-Cloud Service Discovery Registry",
-    students: ["Ketaki Patil", "Swarangi Savekar"],
-    teacher: "Priya Ma'am",
-    feasibility:
-      "https://docs.google.com/document/d/12YVUYUo-CDyd2qqc-9RAH075nCSaWJmobvuWmhQqH1I/edit?usp=sharing",
-    architecture:
-      "https://drive.google.com/drive/folders/1b0WPH1OrzYrpTITkQdsfBlEE8mZctY1i?usp=sharing",
-    report:
-      "https://docs.google.com/document/d/1bOaNiMuLeYbV8753wh_1aRqSRTdWiWwDr6AJesAWz4E/edit?usp=sharing",
-    virtualLab:
-      "https://breakscale.tech/?s=PZMQ5BxVwfzB7g#k=glm4yn7M6l1ulZoHca9yzw",
-  },
-];
+type SheetProject = {
+  group?: string;
+  student1?: string;
+  student2?: string;
+  virtualLab?: string;
+  feasibility?: string;
+  architecture?: string;
+  report?: string;
+};
 
 export default function Home() {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [documentFilter, setDocumentFilter] = useState("all");
+
+  useEffect(() => {
+    async function loadProjects() {
+      try {
+        const response = await fetch("/api/projects");
+
+        if (!response.ok) {
+          throw new Error("Unable to load projects.");
+        }
+
+        const data: SheetProject[] = await response.json();
+
+        if (!Array.isArray(data)) {
+          throw new Error("The project API returned an invalid response.");
+        }
+
+        const mappedProjects: Project[] = data.map((item, index) => ({
+          group: String(item.group || index + 1),
+          title: `Group ${item.group || index + 1} Project`,
+          students: [item.student1, item.student2].filter(
+            (student): student is string => Boolean(student && student.trim())
+          ),
+          virtualLab: item.virtualLab || "",
+          feasibility: item.feasibility || "",
+          architecture: item.architecture || "",
+          report: item.report || "",
+        }));
+
+        setProjects(mappedProjects);
+        setLoadError("");
+      } catch (error) {
+        console.error("Failed to load projects:", error);
+        setLoadError("We couldn't load the projects. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadProjects();
+  }, []);
+
 
   const filteredProjects = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -199,8 +80,7 @@ export default function Home() {
         project.group.toLowerCase().includes(query) ||
         project.students.some((student) =>
           student.toLowerCase().includes(query)
-        ) ||
-        project.teacher.toLowerCase().includes(query);
+        );
 
       const resourceCount = [
         project.virtualLab,
@@ -346,7 +226,7 @@ export default function Home() {
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search title, student, group or teacher..."
+                placeholder="Search group or student..."
                 className="w-full border border-[#deded8] bg-white px-4 py-3 text-sm outline-none transition placeholder:text-[#999a92] focus:border-[#292a26]"
               />
             </div>
@@ -374,20 +254,31 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="hidden grid-cols-[70px_minmax(0,1fr)_minmax(150px,0.7fr)_auto] gap-5 border-b border-[#deded8] py-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#898a82] md:grid">
+          <div className="hidden grid-cols-[70px_minmax(0,1fr)_auto] gap-5 border-b border-[#deded8] py-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#898a82] md:grid">
             <span>Group</span>
             <span>Project / Team</span>
-            <span>Supervisor</span>
             <span className="text-right">Resources</span>
           </div>
 
+          {loading && (
+            <div className="border-b border-[#deded8] py-12 text-center text-sm text-[#777970]">
+              Loading projects from the Google Sheet...
+            </div>
+          )}
+
+          {!loading && loadError && (
+            <div className="border-b border-[#deded8] py-12 text-center text-sm text-red-700">
+              {loadError}
+            </div>
+          )}
+
           <div>
-            {filteredProjects.map((project, index) => (
+            {!loading && !loadError && filteredProjects.map((project, index) => (
               <article
                 key={`${project.group}-${project.title}-${index}`}
                 className="group border-b border-[#deded8] py-6 transition-colors hover:bg-white sm:py-7"
               >
-                <div className="grid gap-4 md:grid-cols-[70px_minmax(0,1fr)_minmax(150px,0.7fr)_auto] md:items-start md:gap-5">
+                <div className="grid gap-4 md:grid-cols-[70px_minmax(0,1fr)_auto] md:items-start md:gap-5">
                   <div className="flex items-center gap-3 md:block">
                     <span className="text-xs font-semibold tabular-nums text-[#777970]">
                       {project.group}
@@ -453,13 +344,6 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="text-sm text-[#777970]">
-                    <span className="mr-2 text-[10px] uppercase tracking-wider text-[#a1a198] md:hidden">
-                      Supervisor:
-                    </span>
-                    {project.teacher}
-                  </div>
-
                   <div className="flex items-center justify-between gap-3 md:justify-end">
                     <span className="text-[10px] uppercase tracking-wider text-[#999a92]">
                       {
@@ -494,7 +378,7 @@ export default function Home() {
             ))}
           </div>
 
-          {filteredProjects.length === 0 && (
+          {!loading && !loadError && filteredProjects.length === 0 && (
             <div className="border-b border-[#deded8] py-20 text-center">
               <p className="text-lg font-medium">No matching projects.</p>
               <p className="mt-2 text-sm text-[#777970]">
