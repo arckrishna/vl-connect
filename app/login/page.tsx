@@ -219,22 +219,22 @@ export default function LoginPage() {
     <main className="min-h-screen flex flex-col bg-[#FAF9F6] text-[#1E2024]">
       {/* Top Collegiate Header */}
       <div className="bg-[#6E121E] text-white text-xs py-2 px-4 text-center font-medium tracking-wide shadow-xs">
-        VIVEKANAND EDUCATION SOCIETY&apos;S INSTITUTE OF TECHNOLOGY (AUTONOMOUS)
+        VIVEKANAND EDUCATION SOCIETY&apos;S INSTITUTE OF TECHNOLOGY (AUTONOMOUS) • DEPARTMENT OF COMPUTER ENGINEERING
       </div>
 
       <div className="flex-1 flex items-center justify-center p-6">
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 sm:p-10 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#8B1E2D]" />
 
-          {/* VESIT Official Crest / Logo */}
-          <div className="flex justify-center mb-6">
-            <div className="relative h-16 w-52">
+          {/* ProjectSphere Logo Mark (Just Logo from Image 4) */}
+          <div className="flex justify-center mb-5">
+            <div className="relative h-20 w-28">
               <Image
-                src="/vesit-logo.png"
-                alt="VESIT Institutional Logo"
+                src="/projectsphere-icon.png"
+                alt="ProjectSphere Logo"
                 fill
                 priority
-                sizes="208px"
+                sizes="112px"
                 className="object-contain"
               />
             </div>
@@ -242,10 +242,10 @@ export default function LoginPage() {
 
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-              VL-CONNECT Portal Access
+              ProjectSphere Portal Access
             </h1>
             <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-[#8B1E2D]">
-              Department of Computer Engineering &amp; Information Technology
+              Department of Computer Engineering
             </p>
 
             <p className="mt-3 text-xs sm:text-sm text-gray-600 leading-relaxed">

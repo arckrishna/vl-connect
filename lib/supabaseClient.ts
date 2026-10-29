@@ -20,6 +20,7 @@ export type SupabaseProject = {
   feasibility?: string;
   architecture?: string;
   report?: string;
+  mentor?: string;
   created_at?: string;
   updated_at?: string;
 };

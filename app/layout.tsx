@@ -13,16 +13,17 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VESIT VL-CONNECT | Vivekanand Education Society's Institute of Technology",
+  title: "ProjectSphere | Department of Computer Engineering, VESIT",
   description:
-    "Official Virtual Labs and Engineering Capstone Repository crafted by students of Vivekanand Education Society's Institute of Technology (VESIT - Autonomous), Chembur, Mumbai.",
+    "Official Virtual Labs and Engineering Capstone Repository crafted by students of Department of Computer Engineering, Vivekanand Education Society's Institute of Technology (VESIT - Autonomous), Chembur, Mumbai.",
   icons: {
     icon: [
-      { url: "/ves-icon.png?v=2", type: "image/png" },
-      { url: "/favicon.ico?v=2" },
+      { url: "/projectsphere-icon.png", type: "image/png" },
+      { url: "/projectsphere-app-icon.png", type: "image/png" },
+      { url: "/favicon.png", type: "image/png" },
     ],
-    shortcut: "/ves-icon.png?v=2",
-    apple: "/apple-icon.png?v=2",
+    shortcut: "/projectsphere-icon.png",
+    apple: "/apple-icon.png",
   },
 };
 
@@ -37,9 +38,9 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased scroll-smooth`}
     >
       <head>
-        <link rel="icon" href="/ves-icon.png?v=2" type="image/png" sizes="any" />
-        <link rel="shortcut icon" href="/ves-icon.png?v=2" type="image/png" />
-        <link rel="apple-touch-icon" href="/apple-icon.png?v=2" />
+        <link rel="icon" href="/projectsphere-icon.png" type="image/png" sizes="any" />
+        <link rel="shortcut icon" href="/projectsphere-icon.png" type="image/png" />
+        <link rel="apple-touch-icon" href="/apple-icon.png" />
       </head>
       <body className="min-h-full flex flex-col bg-[#FAF9F6] text-[#1E2024]">
         {children}
