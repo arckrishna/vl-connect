@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ProjectSphere | Department of Computer Engineering, VESIT",
   description:
-    "Official Virtual Labs and Engineering Capstone Repository crafted by students of Department of Computer Engineering, Vivekanand Education Society's Institute of Technology (VESIT - Autonomous), Chembur, Mumbai.",
+    "Official Virtual Labs and Engineering Repository crafted by students of Department of Computer Engineering, Vivekanand Education Society's Institute of Technology (VESIT - Autonomous), Chembur, Mumbai.",
   icons: {
     icon: [
       { url: "/projectsphere-icon.png", type: "image/png" },
