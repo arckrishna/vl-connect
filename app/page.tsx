@@ -784,12 +784,12 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* Deliverables Action Stack */}
-                      <div className="mt-6 pt-5 border-t border-gray-100 space-y-2">
-                        <div className="flex items-center justify-between mb-2">
+                      {/* Deliverables Action Stack (Image 2 Layout: Top Launch Virtual Lab + Bottom 3 Pills) */}
+                      <div className="mt-6 pt-5 border-t border-gray-100 space-y-2.5">
+                        <div className="flex items-center justify-between mb-1">
                           <p className="text-[11px] uppercase tracking-wider font-semibold text-gray-400">
                             {documentFilter === "all" || documentFilter === "complete"
-                              ? "Project Deliverables & Documentation"
+                              ? "Project Deliverables & Virtual Lab"
                               : documentFilter === "lab"
                               ? "Filtered Deliverable • Virtual Lab Only"
                               : documentFilter === "architecture"
@@ -804,12 +804,12 @@ export default function Home() {
                               onClick={() => setDocumentFilter("all")}
                               className="text-[10px] font-bold text-[#8B1E2D] hover:underline cursor-pointer"
                             >
-                              Show All 4
+                              Show All Resources
                             </button>
                           )}
                         </div>
 
-                        {/* 1. Virtual Lab Simulator Button */}
+                        {/* 1. Top Primary Action Button: Launch Virtual Lab (Matching Image 2) */}
                         {(documentFilter === "all" ||
                           documentFilter === "complete" ||
                           documentFilter === "lab") && (
@@ -818,101 +818,147 @@ export default function Home() {
                               href={project.virtualLab}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-semibold text-xs transition shadow-sm group/btn"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-r from-[#8B1E2D] via-[#9E1E31] to-[#BA253B] hover:from-[#751624] hover:to-[#8B1E2D] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#8B1E2D]/25 hover:shadow-lg hover:shadow-[#8B1E2D]/40 transition-all duration-200 group/btn"
                             >
-                              <span className="flex items-center gap-2">
-                                <span>🚀</span>
-                                <span>Virtual Lab (Interactive Simulator)</span>
+                              <span className="flex items-center gap-2.5">
+                                <span className="text-amber-300 text-base">⚗️</span>
+                                <span className="tracking-wide">Launch Virtual Lab</span>
                               </span>
-                              <span className="transition-transform group-hover/btn:translate-x-1">↗</span>
+                              <span className="text-white/80 group-hover/btn:text-white group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform text-sm font-bold">
+                                ↗
+                              </span>
                             </a>
                           ) : (
-                            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200">
+                            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200">
                               <span className="flex items-center gap-2">
-                                <span>⏳</span>
-                                <span>Virtual Lab — Pending Simulator</span>
+                                <span className="text-gray-400 text-base">⚗️</span>
+                                <span>Launch Virtual Lab — Simulator Pending</span>
                               </span>
                             </div>
                           )
                         )}
 
-                        {/* 2. Architecture Diagram */}
-                        {(documentFilter === "all" ||
-                          documentFilter === "complete" ||
-                          documentFilter === "architecture") && (
-                          project.architecture ? (
-                            <a
-                              href={project.architecture}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-[#0D9488] to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold text-xs transition shadow-sm group/btn"
-                            >
-                              <span className="flex items-center gap-2">
-                                <span>📐</span>
-                                <span>Architecture Blueprint</span>
-                              </span>
-                              <span className="transition-transform group-hover/btn:translate-x-1">↗</span>
-                            </a>
-                          ) : (
-                            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200">
-                              <span className="flex items-center gap-2">
-                                <span>⏳</span>
-                                <span>Architecture — Not Submitted</span>
-                              </span>
-                            </div>
-                          )
+                        {/* 2. Bottom Row: 3 Pill Buttons Side-by-Side (Feasibility | Architecture | Report Matching Image 2) */}
+                        {(documentFilter === "all" || documentFilter === "complete") && (
+                          <div className="grid grid-cols-3 gap-2 pt-0.5">
+                            {/* Feasibility */}
+                            {project.feasibility ? (
+                              <a
+                                href={project.feasibility}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1 py-2 px-2 rounded-xl bg-white hover:bg-amber-50 text-gray-700 hover:text-amber-800 border border-gray-200 hover:border-amber-300 text-xs font-semibold shadow-2xs hover:shadow-xs transition group/sub"
+                                title="Open Feasibility Study Doc"
+                              >
+                                <span>Feasibility</span>
+                                <span className="text-gray-400 group-hover/sub:text-amber-600 text-[10px]">↗</span>
+                              </a>
+                            ) : (
+                              <div className="flex items-center justify-center py-2 px-2 rounded-xl bg-gray-50 text-gray-300 text-xs border border-dashed border-gray-200">
+                                Feasibility
+                              </div>
+                            )}
+
+                            {/* Architecture */}
+                            {project.architecture ? (
+                              <a
+                                href={project.architecture}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1 py-2 px-2 rounded-xl bg-white hover:bg-teal-50 text-gray-700 hover:text-teal-800 border border-gray-200 hover:border-teal-300 text-xs font-semibold shadow-2xs hover:shadow-xs transition group/sub"
+                                title="Open Architecture Diagram"
+                              >
+                                <span>Architecture</span>
+                                <span className="text-gray-400 group-hover/sub:text-teal-600 text-[10px]">↗</span>
+                              </a>
+                            ) : (
+                              <div className="flex items-center justify-center py-2 px-2 rounded-xl bg-gray-50 text-gray-300 text-xs border border-dashed border-gray-200">
+                                Architecture
+                              </div>
+                            )}
+
+                            {/* Report */}
+                            {project.report ? (
+                              <a
+                                href={project.report}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1 py-2 px-2 rounded-xl bg-white hover:bg-purple-50 text-gray-700 hover:text-purple-800 border border-gray-200 hover:border-purple-300 text-xs font-semibold shadow-2xs hover:shadow-xs transition group/sub"
+                                title="Open Research Report"
+                              >
+                                <span>Report</span>
+                                <span className="text-gray-400 group-hover/sub:text-purple-600 text-[10px]">↗</span>
+                              </a>
+                            ) : (
+                              <div className="flex items-center justify-center py-2 px-2 rounded-xl bg-gray-50 text-gray-300 text-xs border border-dashed border-gray-200">
+                                Report
+                              </div>
+                            )}
+                          </div>
                         )}
 
-                        {/* 3. Feasibility Study */}
-                        {(documentFilter === "all" ||
-                          documentFilter === "complete" ||
-                          documentFilter === "feasibility") && (
+                        {/* Filtered Single View for Feasibility */}
+                        {documentFilter === "feasibility" && (
                           project.feasibility ? (
                             <a
                               href={project.feasibility}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-semibold text-xs transition shadow-sm group/btn"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-bold text-xs sm:text-sm shadow-md shadow-amber-600/25 transition group/btn"
                             >
                               <span className="flex items-center gap-2">
                                 <span>📊</span>
-                                <span>Feasibility Analysis</span>
+                                <span>Open Feasibility Study Doc</span>
                               </span>
-                              <span className="transition-transform group-hover/btn:translate-x-1">↗</span>
+                              <span>↗</span>
                             </a>
                           ) : (
-                            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200">
-                              <span className="flex items-center gap-2">
-                                <span>⏳</span>
-                                <span>Feasibility — Not Submitted</span>
-                              </span>
+                            <div className="w-full py-2.5 px-4 rounded-2xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200 text-center">
+                              Feasibility Analysis Pending
                             </div>
                           )
                         )}
 
-                        {/* 4. Research / Project Report */}
-                        {(documentFilter === "all" ||
-                          documentFilter === "complete" ||
-                          documentFilter === "report") && (
+                        {/* Filtered Single View for Architecture */}
+                        {documentFilter === "architecture" && (
+                          project.architecture ? (
+                            <a
+                              href={project.architecture}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-bold text-xs sm:text-sm shadow-md shadow-teal-600/25 transition group/btn"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span>📐</span>
+                                <span>Open Architecture Blueprint</span>
+                              </span>
+                              <span>↗</span>
+                            </a>
+                          ) : (
+                            <div className="w-full py-2.5 px-4 rounded-2xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200 text-center">
+                              Architecture Diagram Pending
+                            </div>
+                          )
+                        )}
+
+                        {/* Filtered Single View for Report */}
+                        {documentFilter === "report" && (
                           project.report ? (
                             <a
                               href={project.report}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold text-xs transition shadow-sm group/btn"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-bold text-xs sm:text-sm shadow-md shadow-purple-600/25 transition group/btn"
                             >
                               <span className="flex items-center gap-2">
                                 <span>📄</span>
-                                <span>Research Report (Thesis)</span>
+                                <span>Open Research Report (Thesis)</span>
                               </span>
-                              <span className="transition-transform group-hover/btn:translate-x-1">↗</span>
+                              <span>↗</span>
                             </a>
                           ) : (
-                            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200">
-                              <span className="flex items-center gap-2">
-                                <span>⏳</span>
-                                <span>Project Report — Not Submitted</span>
-                              </span>
+                            <div className="w-full py-2.5 px-4 rounded-2xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200 text-center">
+                              Research Report Pending
                             </div>
                           )
                         )}
@@ -1095,120 +1141,184 @@ export default function Home() {
         </div>
       </section>
 
-      {/* 6. Faculty Mentors & Academic Guidance Credits Section */}
-      <section id="guidance" className="scroll-mt-24 py-14 bg-white border-t border-gray-200">
+      {/* 6. Faculty Mentors & Academic Guidance Credits Section (Vibrant Modern Colors) */}
+      <section id="guidance" className="scroll-mt-24 py-16 bg-gradient-to-b from-white via-[#FAF9F6] to-white border-t border-gray-200">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-9 h-9 rounded-full bg-[#EEF2FF] text-[#4F46E5] flex items-center justify-center shadow-xs">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="flex items-center gap-3.5 mb-10">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-[#4F46E5] to-[#7C3AED] text-white flex items-center justify-center shadow-md shadow-indigo-500/25">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5" />
               </svg>
             </div>
             <div>
-              <h3 className="text-xl font-bold text-gray-900 tracking-tight">
-                Faculty Mentors &amp; Guidance
-              </h3>
-              <p className="text-xs sm:text-sm text-gray-500">
-                Curriculum design, technical oversight, and project mentorship.
+              <div className="flex items-center gap-2">
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight">
+                  Faculty Mentors &amp; Guidance
+                </h3>
+                <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-rose-100 text-[#8B1E2D] border border-rose-200">
+                  Academic Oversight
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
+                Curriculum design, technical review, and distributed systems project mentorship.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl">
-            {/* Dr. Priya R. L. */}
-            <div className="p-6 rounded-2xl border-2 border-rose-100 bg-gradient-to-br from-white to-rose-50/30 hover:border-[#8B1E2D] hover:shadow-lg transition-all duration-300 flex items-center justify-between gap-4 group">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#6E121E] to-[#9E1B32] text-white font-black text-lg flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl">
+            {/* Dr. Priya R. L. Card (Rich Vibrant Crimson / Rose / Gold) */}
+            <div className="p-6 rounded-3xl border-2 border-rose-200 bg-gradient-to-br from-white via-rose-50/50 to-amber-50/30 hover:border-[#8B1E2D] shadow-sm hover:shadow-xl hover:shadow-rose-900/10 transition-all duration-300 flex items-center justify-between gap-5 group relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-rose-400/10 to-amber-400/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="flex items-center gap-5 min-w-0 relative z-10">
+                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-br from-[#8B1E2D] via-[#A82035] to-[#D92B45] text-white font-black text-xl flex items-center justify-center shadow-lg shadow-[#8B1E2D]/35 ring-4 ring-rose-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
                   PL
                 </div>
                 <div className="min-w-0">
-                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-[#8B1E2D] border border-rose-200 mb-1">
-                    Faculty Mentor • Academic Oversight
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs mb-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Lead Faculty Mentor</span>
                   </div>
-                  <h4 className="text-base font-bold text-gray-900 leading-snug group-hover:text-[#8B1E2D] transition-colors">
+                  <h4 className="text-lg font-black text-gray-900 leading-snug group-hover:text-[#8B1E2D] transition-colors">
                     Dr. Priya R. L.
                   </h4>
-                  <p className="text-xs text-gray-600 leading-tight mt-0.5">
-                    Department of Computer Engineering, VESIT
+                  <p className="text-xs font-semibold text-gray-700 leading-tight mt-0.5">
+                    Associate Professor, Dept. of Computer Engineering
                   </p>
+                  <p className="text-[11px] text-gray-500">
+                    VESIT (Autonomous), Mumbai
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-800 bg-rose-100/80 px-2.5 py-0.5 rounded-md border border-rose-200">
+                      <span>⚡</span>
+                      <span>Distributed Consensus</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100/80 px-2 py-0.5 rounded-md border border-amber-200">
+                      <span>📚</span>
+                      <span>Storage Engines</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Mr. Richard Joseph */}
-            <div className="p-6 rounded-2xl border-2 border-blue-100 bg-gradient-to-br from-white to-blue-50/30 hover:border-[#142A3E] hover:shadow-lg transition-all duration-300 flex items-center justify-between gap-4 group">
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#142A3E] to-[#1E3A8A] text-white font-black text-lg flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
+            {/* Mr. Richard Joseph Card (Rich Vibrant Deep Cobalt / Sapphire / Cyan) */}
+            <div className="p-6 rounded-3xl border-2 border-blue-200 bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/30 hover:border-[#1E3A8A] shadow-sm hover:shadow-xl hover:shadow-blue-900/10 transition-all duration-300 flex items-center justify-between gap-5 group relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-400/10 to-indigo-400/10 rounded-full blur-2xl pointer-events-none" />
+              <div className="flex items-center gap-5 min-w-0 relative z-10">
+                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-br from-[#101D2C] via-[#1E3A8A] to-[#2563EB] text-white font-black text-xl flex items-center justify-center shadow-lg shadow-blue-900/35 ring-4 ring-blue-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
                   RJ
                 </div>
                 <div className="min-w-0">
-                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-900 border border-blue-200 mb-1">
-                    Faculty Mentor • Academic Oversight
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-300 shadow-2xs mb-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+                    <span>Lead Faculty Mentor</span>
                   </div>
-                  <h4 className="text-base font-bold text-gray-900 leading-snug group-hover:text-[#142A3E] transition-colors">
+                  <h4 className="text-lg font-black text-gray-900 leading-snug group-hover:text-[#1E3A8A] transition-colors">
                     Mr. Richard Joseph
                   </h4>
-                  <p className="text-xs text-gray-600 leading-tight mt-0.5">
-                    Department of Computer Engineering, VESIT
+                  <p className="text-xs font-semibold text-gray-700 leading-tight mt-0.5">
+                    Assistant Professor, Dept. of Computer Engineering
                   </p>
+                  <p className="text-[11px] text-gray-500">
+                    VESIT (Autonomous), Mumbai
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-800 bg-blue-100/80 px-2.5 py-0.5 rounded-md border border-blue-200">
+                      <span>☁️</span>
+                      <span>Cloud Service Mesh</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-800 bg-indigo-100/80 px-2 py-0.5 rounded-md border border-indigo-200">
+                      <span>⚗️</span>
+                      <span>Breakscale Virtual Labs</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Student UI Integration Team (like Image 3) */}
-          <div className="mt-14 pt-10 border-t border-gray-100">
-            <div className="flex items-center gap-2.5 mb-6">
-              <span className="w-7 h-7 rounded-lg bg-[#EDE9FE] text-[#7C3AED] flex items-center justify-center font-mono font-bold text-xs shadow-2xs">
-                &lt;/&gt;
+          {/* Student UI Integration Team (Vibrant Popping Cards with Gradient Glowing Avatars) */}
+          <div className="mt-14 pt-10 border-t border-gray-200/80">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+              <div className="flex items-center gap-3">
+                <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#7C3AED] to-[#4F46E5] text-white flex items-center justify-center font-mono font-bold text-xs shadow-md shadow-indigo-500/25">
+                  &lt;/&gt;
+                </span>
+                <div>
+                  <h4 className="text-lg font-black text-[#101D2C] tracking-tight">
+                    Student UI Integration Team
+                  </h4>
+                  <p className="text-xs text-gray-500">
+                    Frontend architecture, API registry integration, and system design simulators.
+                  </p>
+                </div>
+              </div>
+              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-800 border border-indigo-200 shadow-2xs">
+                <span>⚡</span>
+                <span>Core Engineering Authors</span>
               </span>
-              <h4 className="text-base font-bold text-[#101D2C] tracking-tight">
-                Student UI Integration Team
-              </h4>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-              {/* 1. Krishna Lohana */}
-              <div className="bg-white rounded-2xl border border-gray-200/90 hover:border-rose-300 p-5 flex items-center gap-4 shadow-xs hover:shadow-md transition group">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-[#FF5E62] to-[#FF9966] text-white font-extrabold text-base flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
+              {/* 1. Krishna Lohana (Vibrant Coral / Sunset Glow) */}
+              <div className="bg-gradient-to-br from-white via-orange-50/50 to-rose-50/30 rounded-2xl border-2 border-orange-200/90 hover:border-orange-500 p-5 flex items-center gap-4 shadow-sm hover:shadow-xl hover:shadow-orange-500/20 transition-all duration-300 group relative overflow-hidden">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF5E62] via-[#FF758C] to-[#FF9966] text-white font-black text-lg flex items-center justify-center shadow-lg shadow-orange-500/35 ring-4 ring-orange-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
                   KL
                 </div>
                 <div className="min-w-0">
-                  <h5 className="text-sm font-bold text-gray-900 group-hover:text-[#8B1E2D] transition-colors leading-snug">
+                  <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-orange-900 bg-orange-100/90 border border-orange-200 px-2 py-0.5 rounded-full mb-1">
+                    Student Lead
+                  </span>
+                  <h5 className="text-base font-extrabold text-gray-900 group-hover:text-orange-700 transition-colors leading-snug">
                     Krishna Lohana
                   </h5>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Department of Computer Engineering, VESIT
+                  <p className="text-xs text-gray-600 font-medium mt-0.5">
+                    Dept. of Computer Engineering
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    VESIT, Mumbai
                   </p>
                 </div>
               </div>
 
-              {/* 2. James Lijo */}
-              <div className="bg-white rounded-2xl border border-gray-200/90 hover:border-purple-300 p-5 flex items-center gap-4 shadow-xs hover:shadow-md transition group">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-[#7F00FF] to-[#E100FF] text-white font-extrabold text-base flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
+              {/* 2. James Lijo (Vibrant Purple / Electric Violet Glow) */}
+              <div className="bg-gradient-to-br from-white via-purple-50/50 to-violet-50/30 rounded-2xl border-2 border-purple-200/90 hover:border-purple-500 p-5 flex items-center gap-4 shadow-sm hover:shadow-xl hover:shadow-purple-500/20 transition-all duration-300 group relative overflow-hidden">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7F00FF] via-[#8A2BE2] to-[#E100FF] text-white font-black text-lg flex items-center justify-center shadow-lg shadow-purple-500/35 ring-4 ring-purple-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
                   JL
                 </div>
                 <div className="min-w-0">
-                  <h5 className="text-sm font-bold text-gray-900 group-hover:text-purple-700 transition-colors leading-snug">
+                  <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-purple-900 bg-purple-100/90 border border-purple-200 px-2 py-0.5 rounded-full mb-1">
+                    Student Lead
+                  </span>
+                  <h5 className="text-base font-extrabold text-gray-900 group-hover:text-purple-700 transition-colors leading-snug">
                     James Lijo
                   </h5>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Department of Computer Engineering, VESIT
+                  <p className="text-xs text-gray-600 font-medium mt-0.5">
+                    Dept. of Computer Engineering
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    VESIT, Mumbai
                   </p>
                 </div>
               </div>
 
-              {/* 3. Piyush Kandhari */}
-              <div className="bg-white rounded-2xl border border-gray-200/90 hover:border-pink-300 p-5 flex items-center gap-4 shadow-xs hover:shadow-md transition group">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-[#D9138A] to-[#800080] text-white font-extrabold text-base flex items-center justify-center shadow-md shrink-0 group-hover:scale-105 transition-transform">
+              {/* 3. Piyush Kandhari (Vibrant Magenta / Deep Crimson Glow) */}
+              <div className="bg-gradient-to-br from-white via-pink-50/50 to-rose-50/30 rounded-2xl border-2 border-pink-200/90 hover:border-pink-500 p-5 flex items-center gap-4 shadow-sm hover:shadow-xl hover:shadow-pink-500/20 transition-all duration-300 group relative overflow-hidden">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D9138A] via-[#E91E63] to-[#800080] text-white font-black text-lg flex items-center justify-center shadow-lg shadow-pink-500/35 ring-4 ring-pink-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
                   PK
                 </div>
                 <div className="min-w-0">
-                  <h5 className="text-sm font-bold text-gray-900 group-hover:text-pink-700 transition-colors leading-snug">
+                  <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-pink-900 bg-pink-100/90 border border-pink-200 px-2 py-0.5 rounded-full mb-1">
+                    Student Lead
+                  </span>
+                  <h5 className="text-base font-extrabold text-gray-900 group-hover:text-pink-700 transition-colors leading-snug">
                     Piyush Kandhari
                   </h5>
-                  <p className="text-xs text-gray-500 font-medium mt-0.5">
-                    Department of Computer Engineering, VESIT
+                  <p className="text-xs text-gray-600 font-medium mt-0.5">
+                    Dept. of Computer Engineering
+                  </p>
+                  <p className="text-[11px] text-gray-400">
+                    VESIT, Mumbai
                   </p>
                 </div>
               </div>
