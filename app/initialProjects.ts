@@ -86,7 +86,7 @@ export const initialRawProjects: RawProject[] = [
     "feasibility": "https://docs.google.com/document/d/1NDqr3MumUV9BAEevj98OfE2PcLktDsFHVqFS-Dj8vXY/edit?tab=t.0",
     "architecture": "https://drive.google.com/file/d/118ePRGAjgg4E7k5nzeVvxsDhLLwIriTE/view?usp=sharing",
     "report": "https://docs.google.com/document/d/1yxts_WV5Wkq3q48VxpBsEr-xeM7BAR74sD-TblPVpUE/edit?usp=sharing",
-    "virtualLab": "https://breakscale.tech/?s=O31o-XdXgw-jeg",
+    "virtualLab": "https://breakscale.tech/?s=O31o-XdXgw-jeg#k=aLZZfzQjk8ea9ybn6fW_4A",
     "mentor": "Department of Computer Engineering"
   },
   {
@@ -119,7 +119,7 @@ export const initialRawProjects: RawProject[] = [
     "feasibility": "https://docs.google.com/document/d/1KFSip_EB7tz5ztQ7EkOaIcsvdwhkc3C4/edit?usp=sharing&ouid=106974183702480184252&rtpof=true&sd=true",
     "architecture": "https://drive.google.com/file/d/19pU4ncwBBnCS_F8lgzTmoIa6vX7E-3dz/view?usp=sharing",
     "report": "https://docs.google.com/document/d/1ILAsJjsTJiZc2KhQSJz-QSGSm6m-gHQMO3HsdlvzthM/edit?usp=sharing",
-    "virtualLab": "https://breakscale.tech/?s=8pMPySiOi5Qvig",
+    "virtualLab": "https://breakscale.tech/?s=8pMPySiOi5Qvig#k=l_HoBkc_QEt1gATdX9E41A",
     "mentor": "Department of Computer Engineering"
   },
   {
@@ -163,7 +163,7 @@ export const initialRawProjects: RawProject[] = [
     "feasibility": "https://docs.google.com/document/d/1k2VdFmJJUp_P4RN-roenI6ZjM4vI1XZSlHOhgoO2nFU/edit?usp=sharing",
     "architecture": "https://drive.google.com/file/d/1y0uGTJj_97wxIUft-G9eF0Ba74D2xw3I/view?usp=drive_link",
     "report": "https://docs.google.com/document/d/1XP5PFdZVax__D0YgkidzeBPwHsDpKnxf06t5FUu7xuk/edit?usp=sharing",
-    "virtualLab": "https://breakscale.tech/?s=UrRB5mCmixWsoA",
+    "virtualLab": "https://breakscale.tech/?s=UrRB5mCmixWsoA#k=6yhxjLcu7wilz3c5K-6niQ",
     "mentor": "Department of Computer Engineering"
   },
   {
@@ -196,7 +196,7 @@ export const initialRawProjects: RawProject[] = [
     "feasibility": "https://docs.google.com/document/d/12YVUYUo-CDyd2qqc-9RAH075nCSaWJmobvuWmhQqH1I/edit?usp=sharing",
     "architecture": "https://drive.google.com/drive/folders/1b0WPH1OrzYrpTITkQdsfBlEE8mZctY1i?usp=sharing",
     "report": "https://docs.google.com/document/d/1bOaNiMuLeYbV8753wh_1aRqSRTdWiWwDr6AJesAWz4E/edit?usp=sharing",
-    "virtualLab": "https://breakscale.tech/?s=PZMQ5BxVwfzB7g",
+    "virtualLab": "https://breakscale.tech/?s=PZMQ5BxVwfzB7g#k=glm4yn7M6l1ulZoHca9yzw",
     "mentor": "Department of Computer Engineering"
   },
   {
