@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { initialRawProjects, RawProject } from "./initialProjects";
+import { supabase } from "@/lib/supabaseClient";
 
 type Project = {
   group: string;
@@ -20,10 +21,27 @@ type Project = {
 function mapRawProjects(data: RawProject[]): Project[] {
   return data.map((item, index) => {
     const groupNumber = index + 1;
+    // Prefer dynamic title from sheet if returned by Apps Script, otherwise fallback to curated project title
+    const fallbackTitle =
+      initialRawProjects[index]?.title || `Group ${groupNumber} Project`;
+    const itemAny = item as Record<string, any>;
+    const dynamicTitle =
+      (typeof itemAny["title"] === "string" && itemAny["title"].trim()) ||
+      (typeof itemAny["Title"] === "string" && itemAny["Title"].trim()) ||
+      (typeof itemAny["projectTitle"] === "string" && itemAny["projectTitle"].trim()) ||
+      (typeof itemAny["Project Title"] === "string" && itemAny["Project Title"].trim()) ||
+      (typeof itemAny["project_title"] === "string" && itemAny["project_title"].trim()) ||
+      (typeof itemAny["ProjectTitle"] === "string" && itemAny["ProjectTitle"].trim()) ||
+      (typeof itemAny["topic"] === "string" && itemAny["topic"].trim()) ||
+      (typeof itemAny["Topic"] === "string" && itemAny["Topic"].trim()) ||
+      "";
+
+    const resolvedTitle = dynamicTitle || fallbackTitle;
+
     return {
       group: String(groupNumber),
       originalGroup: item.group ? String(item.group) : "",
-      title: `Group ${groupNumber} Project`,
+      title: resolvedTitle,
       students: [item.student1, item.student2].filter(
         (student): student is string => Boolean(student && student.trim())
       ),
@@ -40,39 +58,84 @@ export default function Home() {
   const [projects, setProjects] = useState<Project[]>(() =>
     mapRawProjects(initialRawProjects)
   );
-  const [loading, setLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState<string>("Synced");
   const [loadError, setLoadError] = useState("");
   const [search, setSearch] = useState("");
   const [documentFilter, setDocumentFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
 
-  // Fetch updates in the background without clearing current projects
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Check Supabase session & local demo session
   useEffect(() => {
-    async function loadProjects() {
-      try {
-        setIsRefreshing(true);
-        const response = await fetch("/api/projects");
-
-        if (!response.ok) {
-          throw new Error("Unable to sync latest projects.");
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+      } else {
+        const local = typeof window !== "undefined" ? localStorage.getItem("vl_connect_user") : null;
+        if (local) {
+          try {
+            setCurrentUser(JSON.parse(local));
+          } catch {}
         }
-
-        const data: RawProject[] = await response.json();
-
-        if (Array.isArray(data) && data.length > 0) {
-          setProjects(mapRawProjects(data));
-          setLoadError("");
-        }
-      } catch (error) {
-        console.error("Background sync note:", error);
-        // Do not overwrite pre-seeded data if background fetch fails
-      } finally {
-        setIsRefreshing(false);
       }
-    }
+    });
 
-    loadProjects();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setCurrentUser(session.user);
+      } else {
+        const local = typeof window !== "undefined" ? localStorage.getItem("vl_connect_user") : null;
+        if (local) {
+          try {
+            setCurrentUser(JSON.parse(local));
+          } catch {}
+        } else {
+          setCurrentUser(null);
+        }
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Function to dynamically sync latest rows from Supabase / Google Sheet
+  const syncWithSheet = async (forceFresh = false) => {
+    try {
+      setIsRefreshing(true);
+      const url = forceFresh ? "/api/projects?fresh=true" : "/api/projects";
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error("Unable to sync latest projects.");
+      }
+
+      const data: RawProject[] = await response.json();
+
+      if (Array.isArray(data) && data.length > 0) {
+        setProjects(mapRawProjects(data));
+        setLoadError("");
+        setLastSyncTime(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      }
+    } catch (error) {
+      console.error("Sheet sync note:", error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Sync on initial mount, and auto-poll every 45s so newly added rows show up automatically
+  useEffect(() => {
+    syncWithSheet(false);
+
+    const intervalId = setInterval(() => {
+      syncWithSheet(false);
+    }, 45000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const filteredProjects = useMemo(() => {
@@ -224,25 +287,64 @@ export default function Home() {
               </nav>
 
               <div className="flex items-center gap-2">
-                <Link
-                  href="/login"
-                  className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-[#8B1E2D] border border-[#8B1E2D]/30 rounded-lg hover:bg-[#8B1E2D]/5 transition"
-                >
-                  <svg
-                    className="w-4 h-4 text-[#8B1E2D]"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+                {currentUser ? (
+                  <div className="flex items-center gap-2">
+                    {currentUser.email?.toLowerCase().endsWith("@ves.ac.in") ? (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 shadow-xs">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="font-semibold max-w-[130px] truncate" title={currentUser.email}>
+                          {currentUser.email?.split("@")[0]}
+                        </span>
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.5 rounded">
+                          VESIT
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-800 shadow-xs">
+                        <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="font-semibold max-w-[130px] truncate" title={currentUser.email}>
+                          {currentUser.email?.split("@")[0]}
+                        </span>
+                        <span className="text-[10px] text-blue-700 font-bold bg-blue-100 px-1.5 py-0.5 rounded">
+                          Guest
+                        </span>
+                      </div>
+                    )}
+                    <button
+                      onClick={async () => {
+                        await supabase.auth.signOut();
+                        if (typeof window !== "undefined") {
+                          localStorage.removeItem("vl_connect_user");
+                        }
+                        setCurrentUser(null);
+                      }}
+                      className="px-2.5 py-1.5 text-xs font-semibold text-gray-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                      title="Sign Out"
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                ) : (
+                  <Link
+                    href="/login"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-[#8B1E2D] border border-[#8B1E2D]/30 rounded-lg hover:bg-[#8B1E2D]/5 transition"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                    />
-                  </svg>
-                  <span>Student Sign In</span>
-                </Link>
+                    <svg
+                      className="w-4 h-4 text-[#8B1E2D]"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                      />
+                    </svg>
+                    <span>Student / Faculty Sign In</span>
+                  </Link>
+                )}
 
                 <a
                   href="#projects"
@@ -401,8 +503,26 @@ export default function Home() {
               </p>
             </div>
 
-            {/* View Mode Switcher */}
-            <div className="flex items-center gap-2 self-start md:self-auto">
+            {/* View Mode Switcher & Live Sheet Sync */}
+            <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+              <button
+                type="button"
+                onClick={() => syncWithSheet(true)}
+                disabled={isRefreshing}
+                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-semibold text-gray-700 shadow-xs transition cursor-pointer disabled:opacity-60"
+                title="Click to refresh database records immediately"
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    isRefreshing ? "bg-amber-400 animate-spin" : "bg-emerald-500 animate-pulse"
+                  }`}
+                ></span>
+                <span>{isRefreshing ? "Refreshing..." : "Live Database Synced"}</span>
+                <span className="text-[10px] text-gray-400 font-normal hidden sm:inline">
+                  ({lastSyncTime})
+                </span>
+              </button>
+
               <div className="flex items-center p-1 bg-gray-100 rounded-lg border border-gray-200 text-xs font-medium">
                 <button
                   type="button"
@@ -608,13 +728,31 @@ export default function Home() {
                           </div>
                         </div>
 
-                        {/* Completion tag */}
-                        <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/70">
-                          <svg className="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                          <span>{resourceCount}/4 Ready</span>
-                        </div>
+                        {/* Filter-specific status badge */}
+                        {documentFilter === "architecture" ? (
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200/70">
+                            <span>📐 Architecture</span>
+                          </div>
+                        ) : documentFilter === "lab" ? (
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-full border border-teal-200/70">
+                            <span>🧪 Virtual Lab</span>
+                          </div>
+                        ) : documentFilter === "feasibility" ? (
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200/70">
+                            <span>📄 Feasibility</span>
+                          </div>
+                        ) : documentFilter === "report" ? (
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200/70">
+                            <span>📑 Report</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200/70">
+                            <svg className="w-3.5 h-3.5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            <span>{resourceCount}/4 Ready</span>
+                          </div>
+                        )}
                       </div>
 
                       {/* Title & Students */}
@@ -644,82 +782,174 @@ export default function Home() {
                         </div>
                       </div>
 
-                      {/* Resource Action Links */}
-                      <div className="mt-6 pt-4 border-t border-gray-100 space-y-2.5">
-                        {/* Primary Virtual Lab Link */}
-                        {project.virtualLab ? (
-                          <a
-                            href={project.virtualLab}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#8B1E2D] to-[#A32335] hover:from-[#73121F] hover:to-[#8B1E2D] text-white font-semibold text-xs transition shadow-sm group/btn"
-                          >
-                            <span className="flex items-center gap-2">
-                              <svg className="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                              </svg>
-                              <span>Launch Virtual Lab</span>
-                            </span>
-                            <span className="transition-transform group-hover/btn:translate-x-1">
-                              ↗
-                            </span>
-                          </a>
-                        ) : (
-                          <div className="text-center py-2 text-xs text-gray-400 bg-gray-50 rounded-lg">
-                            Lab Under Deployment
-                          </div>
-                        )}
-
-                        {/* Other Document Resources */}
-                        <div className="grid grid-cols-3 gap-1.5 pt-1 text-center">
-                          {project.feasibility ? (
-                            <a
-                              href={project.feasibility}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-amber-50 hover:border-amber-200 border border-gray-200 text-[11px] font-medium text-gray-700 hover:text-amber-800 transition"
-                              title="View Feasibility Report"
-                            >
-                              Feasibility
-                            </a>
-                          ) : (
-                            <span className="px-2 py-1.5 rounded-lg bg-gray-50/50 border border-dashed border-gray-200 text-[11px] text-gray-400">
-                              Feasibility
-                            </span>
-                          )}
-
-                          {project.architecture ? (
+                      {/* Filter-Aware Resource Action Links */}
+                      <div className="mt-6 pt-4 border-t border-gray-100">
+                        {documentFilter === "architecture" ? (
+                          /* ONLY ARCHITECTURE VIEW */
+                          project.architecture ? (
                             <a
                               href={project.architecture}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border border-gray-200 text-[11px] font-medium text-gray-700 hover:text-blue-800 transition"
-                              title="View Architecture Blueprint"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-semibold text-xs transition shadow-sm group/btn"
                             >
-                              Architecture
+                              <span className="flex items-center gap-2">
+                                <span className="text-base">📐</span>
+                                <span>Open Architecture Blueprint</span>
+                              </span>
+                              <span className="transition-transform group-hover/btn:translate-x-1">
+                                ↗
+                              </span>
                             </a>
                           ) : (
-                            <span className="px-2 py-1.5 rounded-lg bg-gray-50/50 border border-dashed border-gray-200 text-[11px] text-gray-400">
-                              Architecture
-                            </span>
-                          )}
-
-                          {project.report ? (
+                            <div className="text-center py-2.5 text-xs text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                              Architecture Blueprint Pending
+                            </div>
+                          )
+                        ) : documentFilter === "lab" ? (
+                          /* ONLY VIRTUAL LAB VIEW (no lower 3 buttons) */
+                          project.virtualLab ? (
+                            <a
+                              href={project.virtualLab}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-[#0D9488] to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white font-semibold text-xs transition shadow-sm group/btn"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="text-base">🧪</span>
+                                <span>Launch Virtual Lab Simulator</span>
+                              </span>
+                              <span className="transition-transform group-hover/btn:translate-x-1">
+                                ↗
+                              </span>
+                            </a>
+                          ) : (
+                            <div className="text-center py-2.5 text-xs text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                              Virtual Lab Under Deployment
+                            </div>
+                          )
+                        ) : documentFilter === "feasibility" ? (
+                          /* ONLY FEASIBILITY VIEW */
+                          project.feasibility ? (
+                            <a
+                              href={project.feasibility}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-semibold text-xs transition shadow-sm group/btn"
+                            >
+                              <span className="flex items-center gap-2">
+                                <span className="text-base">📄</span>
+                                <span>View Feasibility Study Document</span>
+                              </span>
+                              <span className="transition-transform group-hover/btn:translate-x-1">
+                                ↗
+                              </span>
+                            </a>
+                          ) : (
+                            <div className="text-center py-2.5 text-xs text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                              Feasibility Study Pending
+                            </div>
+                          )
+                        ) : documentFilter === "report" ? (
+                          /* ONLY REPORT VIEW */
+                          project.report ? (
                             <a
                               href={project.report}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-purple-50 hover:border-purple-200 border border-gray-200 text-[11px] font-medium text-gray-700 hover:text-purple-800 transition"
-                              title="View Project Report"
+                              className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 text-white font-semibold text-xs transition shadow-sm group/btn"
                             >
-                              Report
+                              <span className="flex items-center gap-2">
+                                <span className="text-base">📑</span>
+                                <span>View Final Project Report</span>
+                              </span>
+                              <span className="transition-transform group-hover/btn:translate-x-1">
+                                ↗
+                              </span>
                             </a>
                           ) : (
-                            <span className="px-2 py-1.5 rounded-lg bg-gray-50/50 border border-dashed border-gray-200 text-[11px] text-gray-400">
-                              Report
-                            </span>
-                          )}
-                        </div>
+                            <div className="text-center py-2.5 text-xs text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                              Project Report Pending
+                            </div>
+                          )
+                        ) : (
+                          /* ALL / COMPLETE: FULL SUITE (Virtual Lab on top + all 3 below) */
+                          <div className="space-y-2.5">
+                            {project.virtualLab ? (
+                              <a
+                                href={project.virtualLab}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#8B1E2D] to-[#A32335] hover:from-[#73121F] hover:to-[#8B1E2D] text-white font-semibold text-xs transition shadow-sm group/btn"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <svg className="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                  </svg>
+                                  <span>Launch Virtual Lab</span>
+                                </span>
+                                <span className="transition-transform group-hover/btn:translate-x-1">
+                                  ↗
+                                </span>
+                              </a>
+                            ) : (
+                              <div className="text-center py-2 text-xs text-gray-400 bg-gray-50 rounded-lg">
+                                Lab Under Deployment
+                              </div>
+                            )}
+
+                            {/* Full 3 Resource Grid */}
+                            <div className="grid grid-cols-3 gap-1.5 pt-1 text-center">
+                              {project.feasibility ? (
+                                <a
+                                  href={project.feasibility}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-amber-50 hover:border-amber-200 border border-gray-200 text-[11px] font-medium text-gray-700 hover:text-amber-800 transition"
+                                  title="View Feasibility Report"
+                                >
+                                  Feasibility
+                                </a>
+                              ) : (
+                                <span className="px-2 py-1.5 rounded-lg bg-gray-50/50 border border-dashed border-gray-200 text-[11px] text-gray-400">
+                                  Feasibility
+                                </span>
+                              )}
+
+                              {project.architecture ? (
+                                <a
+                                  href={project.architecture}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border border-gray-200 text-[11px] font-medium text-gray-700 hover:text-blue-800 transition"
+                                  title="View Architecture Blueprint"
+                                >
+                                  Architecture
+                                </a>
+                              ) : (
+                                <span className="px-2 py-1.5 rounded-lg bg-gray-50/50 border border-dashed border-gray-200 text-[11px] text-gray-400">
+                                  Architecture
+                                </span>
+                              )}
+
+                              {project.report ? (
+                                <a
+                                  href={project.report}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-purple-50 hover:border-purple-200 border border-gray-200 text-[11px] font-medium text-gray-700 hover:text-purple-800 transition"
+                                  title="View Project Report"
+                                >
+                                  Report
+                                </a>
+                              ) : (
+                                <span className="px-2 py-1.5 rounded-lg bg-gray-50/50 border border-dashed border-gray-200 text-[11px] text-gray-400">
+                                  Report
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -734,10 +964,18 @@ export default function Home() {
                       <tr>
                         <th className="py-3.5 px-4">Group</th>
                         <th className="py-3.5 px-4">Project &amp; Team</th>
-                        <th className="py-3.5 px-4">Virtual Lab Simulator</th>
-                        <th className="py-3.5 px-4">Feasibility</th>
-                        <th className="py-3.5 px-4">Architecture</th>
-                        <th className="py-3.5 px-4">Report</th>
+                        {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "lab") && (
+                          <th className="py-3.5 px-4">Virtual Lab Simulator</th>
+                        )}
+                        {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "feasibility") && (
+                          <th className="py-3.5 px-4">Feasibility</th>
+                        )}
+                        {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "architecture") && (
+                          <th className="py-3.5 px-4">Architecture Blueprint</th>
+                        )}
+                        {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "report") && (
+                          <th className="py-3.5 px-4">Project Report</th>
+                        )}
                         <th className="py-3.5 px-4 text-center">Status</th>
                       </tr>
                     </thead>
@@ -768,63 +1006,71 @@ export default function Home() {
                                 {project.students.join(" • ")}
                               </div>
                             </td>
-                            <td className="py-4 px-4">
-                              {project.virtualLab ? (
-                                <a
-                                  href={project.virtualLab}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 font-bold text-[#8B1E2D] hover:underline text-xs bg-[#8B1E2D]/5 px-2.5 py-1 rounded-md"
-                                >
-                                  <span>Open Lab</span>
-                                  <span>↗</span>
-                                </a>
-                              ) : (
-                                <span className="text-gray-400 text-xs">—</span>
-                              )}
-                            </td>
-                            <td className="py-4 px-4">
-                              {project.feasibility ? (
-                                <a
-                                  href={project.feasibility}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-gray-600 hover:text-black hover:underline"
-                                >
-                                  Document ↗
-                                </a>
-                              ) : (
-                                <span className="text-gray-400 text-xs">—</span>
-                              )}
-                            </td>
-                            <td className="py-4 px-4">
-                              {project.architecture ? (
-                                <a
-                                  href={project.architecture}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-gray-600 hover:text-black hover:underline"
-                                >
-                                  Blueprint ↗
-                                </a>
-                              ) : (
-                                <span className="text-gray-400 text-xs">—</span>
-                              )}
-                            </td>
-                            <td className="py-4 px-4">
-                              {project.report ? (
-                                <a
-                                  href={project.report}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs text-gray-600 hover:text-black hover:underline"
-                                >
-                                  Report ↗
-                                </a>
-                              ) : (
-                                <span className="text-gray-400 text-xs">—</span>
-                              )}
-                            </td>
+                            {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "lab") && (
+                              <td className="py-4 px-4">
+                                {project.virtualLab ? (
+                                  <a
+                                    href={project.virtualLab}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 font-bold text-[#8B1E2D] hover:underline text-xs bg-[#8B1E2D]/5 px-2.5 py-1 rounded-md"
+                                  >
+                                    <span>Open Lab</span>
+                                    <span>↗</span>
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                            )}
+                            {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "feasibility") && (
+                              <td className="py-4 px-4">
+                                {project.feasibility ? (
+                                  <a
+                                    href={project.feasibility}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-gray-600 hover:text-black hover:underline"
+                                  >
+                                    Document ↗
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                            )}
+                            {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "architecture") && (
+                              <td className="py-4 px-4">
+                                {project.architecture ? (
+                                  <a
+                                    href={project.architecture}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 font-bold text-blue-700 hover:underline text-xs bg-blue-50 px-2.5 py-1 rounded-md"
+                                  >
+                                    <span>Blueprint ↗</span>
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                            )}
+                            {(documentFilter === "all" || documentFilter === "complete" || documentFilter === "report") && (
+                              <td className="py-4 px-4">
+                                {project.report ? (
+                                  <a
+                                    href={project.report}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 font-bold text-purple-700 hover:underline text-xs bg-purple-50 px-2.5 py-1 rounded-md"
+                                  >
+                                    <span>Report ↗</span>
+                                  </a>
+                                ) : (
+                                  <span className="text-gray-400 text-xs">—</span>
+                                )}
+                              </td>
+                            )}
                             <td className="py-4 px-4 text-center">
                               <span className="inline-flex items-center text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                                 {resourceCount}/4
@@ -972,6 +1218,7 @@ export default function Home() {
               </span>
             </div>
           </div>
+
         </div>
       </footer>
     </main>

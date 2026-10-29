@@ -1,5 +1,7 @@
 export type RawProject = {
   group?: string;
+  title?: string;
+  projectTitle?: string;
   student1?: string;
   student2?: string;
   virtualLab?: string;
@@ -11,6 +13,7 @@ export type RawProject = {
 export const initialRawProjects: RawProject[] = [
   {
     "group": "3",
+    "title": "RaftLab — Virtual Raft-Consolidated Append-Only Log Engine",
     "student1": "Mamta Mirani",
     "student2": "Trupti Kriplani",
     "virtualLab": "https://raft-lab-beta.vercel.app/",
@@ -20,6 +23,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "4",
+    "title": "Geo-Distributed Active-Active Cache Cluster",
     "student1": "Talha Mulani",
     "student2": "Meet Phulwani",
     "virtualLab": "https://system-design-virtual-lab.vercel.app/",
@@ -29,6 +33,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "5",
+    "title": "TraceLab — Distributed Tracing & Telemetry Collector",
     "student1": "Anuj Ghagare",
     "student2": "Kunal Singh",
     "virtualLab": "https://tracelabvl.netlify.app/",
@@ -38,6 +43,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "6",
+    "title": "Chunk-Level Storage Deduplication Engine",
     "student1": "Shivam Ingulkar",
     "student2": "Rushil shitut",
     "virtualLab": "https://breakscale.tech/?s=SDuxZzGQICPBtg#k=4yj4wMvmaASruXAckss1lQ",
@@ -47,6 +53,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "7",
+    "title": "Resilient Distributed DAG Orchestrator",
     "student1": "Sahil Mirchandani",
     "student2": "James Lijo",
     "virtualLab": "https://resilient-dag-orchestrator.onrender.com/virtual-lab",
@@ -56,6 +63,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "8",
+    "title": "CortexAI — Edge-Based Distributed Rate Limiting Middleware",
     "student1": "Twinkle Gupta",
     "student2": "Krish Bhandari",
     "virtualLab": "https://breakscale.tech/?s=O31o-XdXgw-jeg#k=aLZZfzQjk8ea9ybn6fW_4A",
@@ -65,6 +73,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "9",
+    "title": "ActorLab — Distributed Actor Runtime Virtual Lab",
     "student1": "Mohd Adil Shaikh",
     "student2": "Zaid Mulla",
     "virtualLab": "https://actor-runtime-virtual-lab.netlify.app/",
@@ -74,6 +83,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "11",
+    "title": "Partitioned Distributed Commit Log Broker",
     "student1": "Khyati Keswani",
     "student2": "Malika Makhija",
     "virtualLab": "https://breakscale.tech/?utm_source=chatgpt.com&s=ONSaLW1Tvnn6yQ#k=wXejaT3IKGpTQSRm1xNIuw",
@@ -83,6 +93,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "13",
+    "title": "Fault-Tolerant Distributed Lock Service",
     "student1": "Tanmay Maniyar",
     "student2": "",
     "virtualLab": "https://dist-lock-service-vlab.vercel.app/",
@@ -92,6 +103,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "13",
+    "title": "Distributed Lock Service Simulation",
     "student1": "Prathamesh Shelar",
     "student2": "Chandrabhanu Prusty",
     "virtualLab": "https://breakscale.tech/?s=ccWDYrnjafwMuQ#k=pfZZaDLN-aqbWrJ_WDIx9Q",
@@ -101,6 +113,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "14",
+    "title": "SocketScale — Real-Time Pub/Sub WebSocket Gateway",
     "student1": "Mahek Ahuja ",
     "student2": "Piyush Kandhari ",
     "virtualLab": "https://socketlab.vercel.app/",
@@ -110,6 +123,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "15",
+    "title": "Exactly-Once Event De-duplication Engine",
     "student1": "Mohit Kotwal ",
     "student2": "Aayush Jadhav ",
     "virtualLab": "https://mohitto099.github.io/Exactly-Once-Event-Deduplication-Engine",
@@ -119,6 +133,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "16",
+    "title": "Dynamic L7 API Gateway & Reverse Proxy",
     "student1": "Pranav Kule",
     "student2": "Rishabh Jha",
     "virtualLab": "https://breakscale.tech/?s=PuANS6iU35-KvQ#k=qj1btm6oSflFDO1LT__qRQ",
@@ -128,6 +143,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "18",
+    "title": "Dynamic Layer 7 (L7) API Gateway & Reverse Proxy Simulator",
     "student1": "Partha Dongre",
     "student2": "Shantanu Mokal",
     "virtualLab": "https://l7-gateway-simulator.vercel.app/",
@@ -137,6 +153,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "19",
+    "title": "Chunk-Level Storage Deduplication Engine",
     "student1": "Neilsen Vaz",
     "student2": "Krishna Lohana",
     "virtualLab": "https://breakscale.tech/?s=8pMPySiOi5Qvig#k=l_HoBkc_QEt1gATdX9E41A",
@@ -146,6 +163,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "20",
+    "title": "Fault-Tolerant Distributed Lock Service Simulation",
     "student1": "kripa ahuja",
     "student2": "aanchal ahuja",
     "virtualLab": "https://breakscale.tech/?s=O0AMPTVBqgfdMA#k=x2J6nYSKkehjB9WOYffEyg",
@@ -155,6 +173,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "22",
+    "title": "Distributed Event Ingestion & Worker Queue Pipeline",
     "student1": "Ayush Pamnani ",
     "student2": "Palak Kingrani ",
     "virtualLab": "https://breakscale.tech/?s=Xc-GgWqS-asPHA#k=3aQniHFIqA98Q0xFwdZhmA",
@@ -164,6 +183,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "23",
+    "title": "Multi-Region Active-Passive Failover Controller",
     "student1": "Darshan Kankekar ",
     "student2": "Chetna Ramnani ",
     "virtualLab": "https://failoverlab.netlify.app/",
@@ -173,6 +193,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "24",
+    "title": "StreamLab — Real-Time Streaming Window Metrics Aggregator",
     "student1": "Ishika Gupta",
     "student2": "Harshita Panjwani",
     "virtualLab": "https://streamlabvl.netlify.app/",
@@ -182,6 +203,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "25",
+    "title": "Distributed Log Aggregator & Indexer",
     "student1": "Jeegnasa Makwana",
     "student2": "Leena Chavan",
     "virtualLab": "https://breakscale.tech/?s=jZRH_cpv35twVQ&utm_source=chatgpt.com#k=DH7cEolTXlKc3MgUgEmWGQ",
@@ -191,6 +213,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "28",
+    "title": "Low-Latency Distributed Feature Flag Service",
     "student1": "Kshitij giri",
     "student2": "Shruti belani",
     "virtualLab": "https://distributed-flag-simulator.vercel.app/",
@@ -200,6 +223,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "31",
+    "title": "RegionGuard — Multi-Region Active-Passive Failover Controller",
     "student1": "Palak Lund",
     "student2": "Niyati Motiwani",
     "virtualLab": "https://region-guard.vercel.app",
@@ -209,6 +233,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "34",
+    "title": "Cross-Cloud Service Discovery Registry",
     "student1": "Ketaki Patil",
     "student2": "Swarangi Savekar",
     "virtualLab": "https://breakscale.tech/?s=GZ3CUizVc9dxIw&utm_source=chatgpt.com#k=FaRLxgqryVBLwiZILdkIEg",
@@ -218,6 +243,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "35",
+    "title": "Low-Latency Distributed Feature Flag Service",
     "student1": "sumit",
     "student2": "angad",
     "virtualLab": "https://breakscale.tech/?s=7WW1Up2kPfiygg#k=dOjs0Xs5XGaBEy-0zqejPg",
@@ -227,6 +253,7 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "46",
+    "title": "Distributed Tracing & Telemetry Collector",
     "student1": "Lavanya Reddy",
     "student2": "Khushboo Choudhary",
     "virtualLab": "https://breakscale.tech/?utm_source=chatgpt.com",
