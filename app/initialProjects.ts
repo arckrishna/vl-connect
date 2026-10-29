@@ -91,8 +91,8 @@ export const initialRawProjects: RawProject[] = [
   },
   {
     "group": "08",
-    "student1": "Prathamesh",
-    "student2": "Chandrabhanu",
+    "student1": "Prathamesh Shelar",
+    "student2": "Chandrabhanu Prusty",
     "title": "Fault Tolerant Distributed Lock Service",
     "feasibility": "https://docs.google.com/document/d/1gQn1SJjVz_v0hdvlVOLwRQXZZ3D3nYXZQ4Ts7RVdVas/edit?usp=sharing",
     "architecture": "https://drive.google.com/file/d/1jfXwhRW-RrI2YEH9lwEmIcAs3WilLrAP/view?usp=sharing",

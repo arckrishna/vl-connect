@@ -49,6 +49,65 @@ function mapRawProjects(data: RawProject[]): Project[] {
   });
 }
 
+// High-Quality Erlenmeyer Chemistry Laboratory Flask Icon (Matching Image 2)
+function LabFlaskIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ filter: "drop-shadow(0 0 4px rgba(245, 158, 11, 0.45))" }}
+    >
+      <defs>
+        <linearGradient id="flaskLiquidGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FDE047" />
+          <stop offset="40%" stopColor="#F59E0B" />
+          <stop offset="75%" stopColor="#EA580C" />
+          <stop offset="100%" stopColor="#B45309" />
+        </linearGradient>
+        <linearGradient id="flaskGlassGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stopColor="#FEF08A" stopOpacity="0.95" />
+          <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.8" />
+        </linearGradient>
+      </defs>
+      {/* Liquid inside flask */}
+      <path
+        d="M9.5 9.5L4.4 17.8C3.8 18.8 4.5 20.1 5.7 20.1H18.3C19.5 20.1 20.2 18.8 19.6 17.8L14.5 9.5H9.5Z"
+        fill="url(#flaskLiquidGrad)"
+      />
+      {/* Liquid surface wave */}
+      <path
+        d="M6.6 15C8.5 14.3 11 15.6 13.5 15.1C15 14.8 16.5 15.2 17.4 15.6"
+        stroke="#FEF08A"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+      {/* Internal bubbles */}
+      <circle cx="10" cy="17.2" r="1.1" fill="#FEF9C3" opacity="0.9" />
+      <circle cx="14" cy="18" r="0.9" fill="#FEF9C3" opacity="0.8" />
+      <circle cx="12" cy="16.2" r="0.7" fill="#FEF9C3" opacity="0.9" />
+      {/* Flask outline & neck */}
+      <path
+        d="M9 2.5H15M10 2.5V8.5L3.8 18.2C3 19.5 3.9 21.2 5.5 21.2H18.5C20.1 21.2 21 19.5 20.2 18.2L14 8.5V2.5"
+        stroke="url(#flaskGlassGlow)"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Specular glass reflection */}
+      <path
+        d="M10 5.5V8.2L6 14.5"
+        stroke="#FFFFFF"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        opacity="0.65"
+      />
+    </svg>
+  );
+}
+
 export default function Home() {
   // Pre-seed state with initialRawProjects so page is NEVER empty on initial render
   const [projects, setProjects] = useState<Project[]>(() =>
@@ -821,8 +880,8 @@ export default function Home() {
                               className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-gradient-to-r from-[#8B1E2D] via-[#9E1E31] to-[#BA253B] hover:from-[#751624] hover:to-[#8B1E2D] text-white font-bold text-xs sm:text-sm shadow-md shadow-[#8B1E2D]/25 hover:shadow-lg hover:shadow-[#8B1E2D]/40 transition-all duration-200 group/btn"
                             >
                               <span className="flex items-center gap-2.5">
-                                <span className="text-amber-300 text-base">⚗️</span>
-                                <span className="tracking-wide">Launch Virtual Lab</span>
+                                <LabFlaskIcon className="w-5 h-5 shrink-0" />
+                                <span className="tracking-wide font-extrabold">Launch Virtual Lab</span>
                               </span>
                               <span className="text-white/80 group-hover/btn:text-white group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5 transition-transform text-sm font-bold">
                                 ↗
@@ -831,7 +890,7 @@ export default function Home() {
                           ) : (
                             <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl bg-gray-50 text-gray-400 text-xs border border-dashed border-gray-200">
                               <span className="flex items-center gap-2">
-                                <span className="text-gray-400 text-base">⚗️</span>
+                                <LabFlaskIcon className="w-5 h-5 opacity-40 shrink-0" />
                                 <span>Launch Virtual Lab — Simulator Pending</span>
                               </span>
                             </div>
