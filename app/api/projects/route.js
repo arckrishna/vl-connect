@@ -32,18 +32,44 @@ export async function GET(request) {
 
     // Use Supabase data if it has been updated with the teacher's final 21 projects
     if (!supabaseError && Array.isArray(supabaseRows) && supabaseRows.length === 21) {
-      finalProjects = supabaseRows.map((row) => ({
-        group: String(row.original_group || row.group_number),
-        groupNumber: row.group_number,
-        title: row.title,
-        student1: Array.isArray(row.students) ? row.students[0] || "" : "",
-        student2: Array.isArray(row.students) ? row.students[1] || "" : "",
-        virtualLab: row.virtual_lab || "",
-        feasibility: row.feasibility || "",
-        architecture: row.architecture || "",
-        report: row.report || "",
-        mentor: row.mentor || "Department of Computer Engineering",
-      }));
+      finalProjects = supabaseRows.map((row) => {
+        const rowGroup = String(row.original_group || row.group_number);
+        const rawMatch = initialRawProjects.find(
+          (p) =>
+            String(p.group) === rowGroup ||
+            String(p.group).padStart(2, "0") === rowGroup.padStart(2, "0")
+        );
+
+        let student1 = Array.isArray(row.students) ? row.students[0] || "" : "";
+        let student2 = Array.isArray(row.students) ? row.students[1] || "" : "";
+
+        // If local data has full surname (e.g. Prathamesh Shelar vs Prathamesh), preserve the full name
+        if (rawMatch?.student1 && rawMatch.student1.length > student1.length) {
+          student1 = rawMatch.student1;
+        }
+        if (rawMatch?.student2 && rawMatch.student2.length > student2.length) {
+          student2 = rawMatch.student2;
+        }
+
+        let virtualLab = row.virtual_lab || "";
+        // If rawMatch has the complete Breakscale #k= decryption key, preserve it
+        if (rawMatch?.virtualLab && rawMatch.virtualLab.includes("#k=") && !virtualLab.includes("#k=")) {
+          virtualLab = rawMatch.virtualLab;
+        }
+
+        return {
+          group: String(row.original_group || row.group_number),
+          groupNumber: row.group_number,
+          title: row.title || rawMatch?.title || "",
+          student1: student1 || rawMatch?.student1 || "",
+          student2: student2 || rawMatch?.student2 || "",
+          virtualLab: virtualLab || rawMatch?.virtualLab || "",
+          feasibility: row.feasibility || rawMatch?.feasibility || "",
+          architecture: row.architecture || rawMatch?.architecture || "",
+          report: row.report || rawMatch?.report || "",
+          mentor: row.mentor || "Department of Computer Engineering",
+        };
+      });
     }
   } catch (sbErr) {
     console.warn("Supabase query note:", sbErr);
