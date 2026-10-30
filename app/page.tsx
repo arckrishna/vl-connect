@@ -1353,7 +1353,7 @@ export default function Home() {
                     Dr. Priya R. L.
                   </h4>
                   <p className="text-xs font-semibold text-gray-700 leading-tight mt-0.5">
-                    Associate Professor, Dept. of Computer Engineering
+                    Assistant Professor, Dept. of Computer Engineering
                   </p>
                   <p className="text-[11px] text-gray-500">
                     VESIT (Autonomous), Mumbai
@@ -1640,7 +1640,7 @@ export default function Home() {
 
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-white/50 gap-4">
             <p>
-              © 2026 VESIT ProjectSphere • Department of Computer Engineering • Vivekanand Education Society
+              © 2026 VESIT ProjectSphere • Department of Computer Engineering • Vivekanand Education Society&apos;s Institute of Technology
             </p>
             <p className="text-[11px] text-white/40">
               NAAC &apos;A+&apos; Accredited Autonomous Engineering Institute
