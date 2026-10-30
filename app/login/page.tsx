@@ -231,12 +231,12 @@ export default function LoginPage() {
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 sm:p-10 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#8B1E2D]" />
 
-          {/* ProjectSphere Logo */}
+          {/* DesignSphere Logo */}
           <div className="flex justify-center mb-5">
             <div className="relative h-20 w-28">
               <Image
-                src="/projectsphere-icon.png"
-                alt="ProjectSphere Logo"
+                src="/designsphere-icon.png"
+                alt="DesignSphere Logo"
                 fill
                 priority
                 sizes="112px"
@@ -247,7 +247,7 @@ export default function LoginPage() {
 
           <div className="text-center">
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">
-              ProjectSphere Portal Access
+              DesignSphere Portal Access
             </h1>
             <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-[#8B1E2D]">
               Department of Computer Engineering

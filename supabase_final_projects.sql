@@ -1,5 +1,5 @@
 -- ==============================================================================
--- ProjectSphere: Official Student Virtual Labs (Teacher's Final Selection)
+-- DesignSphere: Official Student Virtual Labs (Teacher's Final Selection)
 -- Run this script in Supabase Dashboard -> SQL Editor
 -- All 21 projects with complete Breakscale AES decryption keys (#k=)
 -- ==============================================================================

@@ -227,7 +227,7 @@ export default function Home() {
       if (session?.user) {
         setCurrentUser(session.user);
       } else {
-        const local = typeof window !== "undefined" ? localStorage.getItem("vl_connect_user") || localStorage.getItem("projectsphere_user") : null;
+        const local = typeof window !== "undefined" ? localStorage.getItem("vl_connect_user") || localStorage.getItem("designsphere_user") || localStorage.getItem("projectsphere_user") : null;
         if (local) {
           try {
             setCurrentUser(JSON.parse(local));
@@ -242,7 +242,7 @@ export default function Home() {
       if (session?.user) {
         setCurrentUser(session.user);
       } else {
-        const local = typeof window !== "undefined" ? localStorage.getItem("vl_connect_user") || localStorage.getItem("projectsphere_user") : null;
+        const local = typeof window !== "undefined" ? localStorage.getItem("vl_connect_user") || localStorage.getItem("designsphere_user") || localStorage.getItem("projectsphere_user") : null;
         if (local) {
           try {
             setCurrentUser(JSON.parse(local));
@@ -415,11 +415,11 @@ export default function Home() {
         </div>
       </div>
 
-      {/* 2. Main Navigation Header: ProjectSphere Brand */}
+      {/* 2. Main Navigation Header: DesignSphere Brand */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-200 shadow-2xs">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20">
-            {/* Left: Official VESIT Crest & ProjectSphere Brand */}
+            {/* Left: Official VESIT Crest & DesignSphere Brand */}
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="relative h-12 w-36 sm:h-14 sm:w-48">
                 <Image
@@ -434,12 +434,12 @@ export default function Home() {
 
               <div className="hidden sm:block h-10 w-px bg-gray-200 mx-1" />
 
-              {/* Logo with Name from Image 4 */}
+              {/* DesignSphere Logo */}
               <div className="hidden sm:flex items-center gap-3">
                 <div className="relative h-11 w-44">
                   <Image
-                    src="/projectsphere-logo.png"
-                    alt="ProjectSphere - Connecting Ideas, Projects, People"
+                    src="/designsphere-logo.png"
+                    alt="DesignSphere - Connecting Ideas, Projects, People"
                     fill
                     priority
                     sizes="176px"
@@ -506,6 +506,7 @@ export default function Home() {
                         await supabase.auth.signOut();
                         if (typeof window !== "undefined") {
                           localStorage.removeItem("vl_connect_user");
+                          localStorage.removeItem("designsphere_user");
                           localStorage.removeItem("projectsphere_user");
                         }
                         setCurrentUser(null);
@@ -1553,8 +1554,8 @@ export default function Home() {
                 </div>
                 <div className="relative h-12 w-44 bg-white p-1.5 rounded-lg">
                   <Image
-                    src="/projectsphere-logo.png"
-                    alt="ProjectSphere"
+                    src="/designsphere-logo.png"
+                    alt="DesignSphere"
                     fill
                     sizes="176px"
                     className="object-contain"
@@ -1640,7 +1641,7 @@ export default function Home() {
 
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-between text-xs text-white/50 gap-4">
             <p>
-              © 2026 VESIT ProjectSphere • Department of Computer Engineering • Vivekanand Education Society&apos;s Institute of Technology
+              © 2026 VESIT DesignSphere • Department of Computer Engineering • Vivekanand Education Society&apos;s Institute of Technology
             </p>
             <p className="text-[11px] text-white/40">
               NAAC &apos;A+&apos; Accredited Autonomous Engineering Institute

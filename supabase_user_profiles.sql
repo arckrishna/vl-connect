@@ -1,5 +1,5 @@
 -- ==============================================================================
--- ProjectSphere: User Profiles & Authentication Integration for Supabase
+-- DesignSphere: User Profiles & Authentication Integration for Supabase
 -- Run this script in your Supabase Dashboard -> SQL Editor
 -- ==============================================================================
 
