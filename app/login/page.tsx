@@ -57,7 +57,7 @@ export default function LoginPage() {
         return;
       }
       if (!cleanLastName) {
-        setMessage({ type: "error", text: "Please enter your last name (surname)." });
+        setMessage({ type: "error", text: "Please enter your last name." });
         return;
       }
 
@@ -329,13 +329,13 @@ export default function LoginPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
-                    Surname
+                    Last Name
                   </label>
                   <input
                     type="text"
                     value={lastName}
                     onChange={(e) => setLastName(e.target.value)}
-                    placeholder="Surname"
+                    placeholder="Last name"
                     required
                     className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
                   />
