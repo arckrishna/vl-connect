@@ -391,10 +391,16 @@ export default function Home() {
                 {currentUser ? (
                   <div className="flex items-center gap-2.5 bg-gray-50 border border-gray-200/90 py-1.5 px-3 rounded-full">
                     <div className="w-6 h-6 rounded-full bg-[#8B1E2D] text-white flex items-center justify-center text-xs font-bold shadow-2xs">
-                      {currentUser.email ? currentUser.email[0].toUpperCase() : "U"}
+                      {currentUser.user_metadata?.first_name
+                        ? currentUser.user_metadata.first_name[0].toUpperCase()
+                        : currentUser.email
+                        ? currentUser.email[0].toUpperCase()
+                        : "U"}
                     </div>
-                    <span className="text-xs font-medium text-gray-700 hidden sm:inline max-w-[140px] truncate">
-                      {currentUser.email}
+                    <span className="text-xs font-medium text-gray-700 hidden sm:inline max-w-[150px] truncate">
+                      {currentUser.user_metadata?.first_name
+                        ? `${currentUser.user_metadata.first_name} ${currentUser.user_metadata.last_name || ""}`.trim()
+                        : currentUser.email}
                     </span>
                     <button
                       onClick={async () => {

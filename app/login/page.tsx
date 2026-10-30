@@ -8,18 +8,24 @@ import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
-  // Email & Password is the default tab as requested
-  const [authMode, setAuthMode] = useState<"password" | "otp">("password");
+
+  // Mode: "signin" | "signup"
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+
+  // Form Fields
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error" | "info"; text: string } | null>(null);
 
-  // 1. Primary: Email + Password Authentication (Sign In & Sign Up)
-  const handlePasswordAuth = async (e: React.FormEvent) => {
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{
+    type: "success" | "error" | "info";
+    text: string;
+  } | null>(null);
+
+  // Submit Handler for Sign In & Sign Up
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
 
@@ -28,29 +34,63 @@ export default function LoginPage() {
       setMessage({ type: "error", text: "Please enter a valid email address." });
       return;
     }
+
     if (!password || password.length < 6) {
-      setMessage({ type: "error", text: "Password must be at least 6 characters." });
+      setMessage({
+        type: "error",
+        text: "Password must be at least 6 characters long.",
+      });
       return;
     }
 
-    try {
-      setLoading(true);
-      const isVes = cleanEmail.endsWith("@ves.ac.in");
+    const isVes = cleanEmail.endsWith("@ves.ac.in");
 
-      if (isSignUp) {
+    // ==========================================
+    // 1. SIGN UP (Create Account)
+    // ==========================================
+    if (mode === "signup") {
+      const cleanFirstName = firstName.trim();
+      const cleanLastName = lastName.trim();
+
+      if (!cleanFirstName) {
+        setMessage({ type: "error", text: "Please enter your first name." });
+        return;
+      }
+      if (!cleanLastName) {
+        setMessage({ type: "error", text: "Please enter your last name (surname)." });
+        return;
+      }
+
+      const fullName = `${cleanFirstName} ${cleanLastName}`.trim();
+
+      try {
+        setLoading(true);
+
         const { data, error } = await supabase.auth.signUp({
           email: cleanEmail,
           password: password,
+          options: {
+            data: {
+              first_name: cleanFirstName,
+              last_name: cleanLastName,
+              surname: cleanLastName,
+              full_name: fullName,
+              is_vesit: isVes,
+            },
+          },
         });
 
         if (error) {
-          // If Supabase free tier email rate limit is hit during signup
+          // If rate limited on Supabase free tier email service
           if (error.message.toLowerCase().includes("rate limit")) {
             const fallbackUser = {
               id: "usr_" + Math.random().toString(36).substring(2, 9),
               email: cleanEmail,
               user_metadata: {
-                full_name: isVes ? cleanEmail.split("@")[0].toUpperCase() : "Reviewer",
+                first_name: cleanFirstName,
+                last_name: cleanLastName,
+                surname: cleanLastName,
+                full_name: fullName,
                 is_vesit: isVes,
               },
             };
@@ -59,7 +99,7 @@ export default function LoginPage() {
             }
             setMessage({
               type: "success",
-              text: `Account created for ${cleanEmail}! Entering portal...`,
+              text: `✓ Welcome ${fullName}! Account created. Entering portal...`,
             });
             setTimeout(() => router.push("/"), 700);
             return;
@@ -67,6 +107,23 @@ export default function LoginPage() {
           throw error;
         }
 
+        // Try inserting into profiles table if available
+        if (data?.user?.id) {
+          try {
+            await supabase.from("profiles").upsert({
+              id: data.user.id,
+              first_name: cleanFirstName,
+              last_name: cleanLastName,
+              email: cleanEmail,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          } catch (profileErr) {
+            console.warn("Profile table note:", profileErr);
+          }
+        }
+
+        // If session created immediately (auto-confirm enabled)
         if (data?.session) {
           if (typeof window !== "undefined") {
             localStorage.removeItem("vl_connect_user");
@@ -74,146 +131,94 @@ export default function LoginPage() {
           setMessage({
             type: "success",
             text: isVes
-              ? `✓ Account registered as VESIT Member (${cleanEmail}). Entering portal...`
-              : `✓ Account registered as Guest Reviewer (${cleanEmail}). Entering portal...`,
+              ? `✓ Welcome ${fullName}! Registered as VESIT Member. Entering portal...`
+              : `✓ Welcome ${fullName}! Registered as Guest Reviewer. Entering portal...`,
           });
           setTimeout(() => router.push("/"), 700);
-        } else {
-          setMessage({
-            type: "success",
-            text: "Account registered successfully! You can now sign in.",
-          });
-          setIsSignUp(false);
+          return;
         }
-      } else {
-        // Sign In
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email: cleanEmail,
-          password: password,
+
+        // Try signing in immediately in case auto-confirm is enabled without session
+        try {
+          const { data: signInData } = await supabase.auth.signInWithPassword({
+            email: cleanEmail,
+            password: password,
+          });
+          if (signInData?.session) {
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("vl_connect_user");
+            }
+            setMessage({
+              type: "success",
+              text: `✓ Welcome ${fullName}! Entering portal...`,
+            });
+            setTimeout(() => router.push("/"), 700);
+            return;
+          }
+        } catch {}
+
+        // If email confirmation is required by Supabase Auth settings
+        setMessage({
+          type: "success",
+          text: `✓ Account created for ${fullName}! You can now sign in with your password.`,
         });
-
-        if (error) {
-          // If credentials fail in Supabase, check if user intended to authenticate as institutional member
-          if (error.message.toLowerCase().includes("invalid login credentials")) {
-            // Check if user wants quick institutional sign in or typo
-            throw new Error("Invalid email or password. If you don't have an account yet, click 'Need an account? Sign Up' below.");
-          }
-          throw error;
-        }
-
-        if (data?.session) {
-          if (typeof window !== "undefined") {
-            localStorage.removeItem("vl_connect_user");
-          }
-          setMessage({
-            type: "success",
-            text: isVes
-              ? `✓ Welcome back, VESIT Member (${cleanEmail})! Entering portal...`
-              : `✓ Welcome back, Guest Reviewer (${cleanEmail})! Entering portal...`,
-          });
-          setTimeout(() => router.push("/"), 700);
-        }
-      }
-    } catch (err: any) {
-      const errMsg = err.message || "";
-      if (errMsg.toLowerCase().includes("rate limit")) {
+        setMode("signin");
+      } catch (err: any) {
         setMessage({
           type: "error",
-          text: "Email rate limit reached on Supabase. You can sign in directly using your password.",
+          text: err.message || "Failed to create account. Please try again.",
         });
-      } else {
-        setMessage({ type: "error", text: errMsg || "Authentication failed. Please verify credentials." });
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 2. Optional: Email Verification Code (OTP / Magic Link)
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage(null);
-
-    const cleanEmail = email.trim().toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      setMessage({ type: "error", text: "Please enter a valid email address." });
       return;
     }
 
+    // ==========================================
+    // 2. SIGN IN (Email & Password)
+    // ==========================================
     try {
       setLoading(true);
-      const isVes = cleanEmail.endsWith("@ves.ac.in");
-      const { error } = await supabase.auth.signInWithOtp({
+
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
-        options: {
-          emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
-          shouldCreateUser: true,
-        },
+        password: password,
       });
 
-      if (error) throw error;
-
-      setOtpSent(true);
-      setMessage({
-        type: "success",
-        text: `Verification code sent to ${cleanEmail}. ${
-          isVes ? "Recognized as VESIT Member." : "Recognized as Guest Reviewer."
-        }`,
-      });
-    } catch (err: any) {
-      const errMsg = err.message || "";
-      if (errMsg.toLowerCase().includes("rate limit")) {
-        setMessage({
-          type: "error",
-          text: "Supabase free email rate limit exceeded (2 emails/hr). Please switch to the 'Email & Password' tab above to sign in without email limits!",
-        });
-      } else {
-        setMessage({ type: "error", text: errMsg || "Unable to send verification code." });
+      if (error) {
+        if (error.message.toLowerCase().includes("invalid login credentials")) {
+          throw new Error(
+            "Invalid email or password. If you don't have an account yet, click 'Create Account' above."
+          );
+        }
+        throw error;
       }
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  // 3. Verify OTP
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setMessage(null);
-
-    const cleanOtp = otp.trim();
-    if (!cleanOtp) {
-      setMessage({ type: "error", text: "Please enter the verification code." });
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const { data, error } = await supabase.auth.verifyOtp({
-        email: email.trim().toLowerCase(),
-        token: cleanOtp,
-        type: "email",
-      });
-
-      if (error) throw error;
-
-      if (data.session) {
+      if (data?.session) {
         if (typeof window !== "undefined") {
           localStorage.removeItem("vl_connect_user");
         }
-        setMessage({ type: "success", text: "Verification successful! Entering portal..." });
+        const userMeta = data.session.user?.user_metadata;
+        const displayName =
+          userMeta?.first_name || userMeta?.full_name || cleanEmail;
+
+        setMessage({
+          type: "success",
+          text: isVes
+            ? `✓ Welcome back, ${displayName} (VESIT)! Entering portal...`
+            : `✓ Welcome back, ${displayName}! Entering portal...`,
+        });
         setTimeout(() => router.push("/"), 700);
       }
     } catch (err: any) {
       setMessage({
         type: "error",
-        text: err.message || "Invalid verification code. Please try again.",
+        text: err.message || "Authentication failed. Please verify credentials.",
       });
     } finally {
       setLoading(false);
     }
   };
-
-
 
   return (
     <main className="min-h-screen flex flex-col bg-[#FAF9F6] text-[#1E2024]">
@@ -226,7 +231,7 @@ export default function LoginPage() {
         <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-8 sm:p-10 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 left-0 right-0 h-1.5 bg-[#8B1E2D]" />
 
-          {/* ProjectSphere Logo Mark (Just Logo from Image 4) */}
+          {/* ProjectSphere Logo */}
           <div className="flex justify-center mb-5">
             <div className="relative h-20 w-28">
               <Image
@@ -253,35 +258,35 @@ export default function LoginPage() {
             </p>
           </div>
 
-          {/* Top Switcher: Email & Password (Default) vs Verification Code (Optional) */}
+          {/* Top Pill Switcher: Sign In vs Create Account */}
           <div className="mt-6 p-1 bg-gray-100 rounded-xl grid grid-cols-2 text-xs font-semibold">
             <button
               type="button"
               onClick={() => {
-                setAuthMode("password");
+                setMode("signin");
                 setMessage(null);
               }}
               className={`py-2 rounded-lg transition cursor-pointer ${
-                authMode === "password"
+                mode === "signin"
                   ? "bg-white text-[#8B1E2D] shadow-xs font-bold"
                   : "text-gray-500 hover:text-gray-900"
               }`}
             >
-              Email &amp; Password
+              Sign In
             </button>
             <button
               type="button"
               onClick={() => {
-                setAuthMode("otp");
+                setMode("signup");
                 setMessage(null);
               }}
               className={`py-2 rounded-lg transition cursor-pointer ${
-                authMode === "otp"
+                mode === "signup"
                   ? "bg-white text-[#8B1E2D] shadow-xs font-bold"
                   : "text-gray-500 hover:text-gray-900"
               }`}
             >
-              Verification Code (OTP)
+              Create Account
             </button>
           </div>
 
@@ -303,141 +308,104 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Form 1: Email & Password (Default) */}
-          {authMode === "password" && (
-            <form onSubmit={handlePasswordAuth} className="mt-5 space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
-                  Email Address
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@ves.ac.in or personal@gmail.com"
-                  required
-                  autoFocus
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
-                />
+          {/* Authentication Form */}
+          <form onSubmit={handleSubmit} className="mt-5 space-y-3.5">
+            {/* Additional Fields for Sign Up: Name & Surname */}
+            {mode === "signup" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
+                    First Name
+                  </label>
+                  <input
+                    type="text"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    placeholder="First name"
+                    required
+                    autoFocus
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
+                    Surname
+                  </label>
+                  <input
+                    type="text"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    placeholder="Surname"
+                    required
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
+                  />
+                </div>
               </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
-                  Password
-                </label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                  minLength={6}
-                  className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
-                />
-              </div>
+            {/* Email Address */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@ves.ac.in or personal email"
+                required
+                autoFocus={mode === "signin"}
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
+              />
+            </div>
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#8B1E2D] hover:bg-[#73121F] disabled:opacity-60 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#8B1E2D]/20 transition cursor-pointer"
-              >
-                {loading
-                  ? "Processing..."
-                  : isSignUp
-                  ? "Create Account"
-                  : "Sign In"}
-              </button>
+            {/* Password */}
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
+                Password
+              </label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="•••••••• (min 6 characters)"
+                required
+                minLength={6}
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
+              />
+            </div>
 
-              <div className="flex items-center justify-between text-xs pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsSignUp(!isSignUp);
-                    setMessage(null);
-                  }}
-                  className="text-[#8B1E2D] hover:underline font-semibold cursor-pointer"
-                >
-                  {isSignUp
-                    ? "Already have an account? Sign In"
-                    : "Need an account? Sign Up"}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {/* Form 2: Optional Verification Code (OTP) */}
-          {authMode === "otp" && (
-            <>
-              {!otpSent ? (
-                <form onSubmit={handleSendOtp} className="mt-5 space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="name@ves.ac.in or personal@gmail.com"
-                      required
-                      autoFocus
-                      className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition placeholder:text-gray-400"
-                    />
-                    <p className="mt-1 text-[11px] text-gray-500">
-                      We will send a one-time verification code to this email.
-                    </p>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#8B1E2D] hover:bg-[#73121F] disabled:opacity-60 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#8B1E2D]/20 transition cursor-pointer"
-                  >
-                    {loading ? "Sending Code..." : "Send Verification Code →"}
-                  </button>
-                </form>
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#8B1E2D] hover:bg-[#73121F] disabled:opacity-60 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#8B1E2D]/20 transition cursor-pointer"
+            >
+              {loading ? (
+                <span>Processing...</span>
+              ) : mode === "signup" ? (
+                <span>Create Account →</span>
               ) : (
-                <form onSubmit={handleVerifyOtp} className="mt-5 space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-gray-700 mb-1">
-                      Enter Verification Code
-                    </label>
-                    <input
-                      type="text"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      placeholder="Enter verification code"
-                      maxLength={10}
-                      required
-                      autoFocus
-                      className="w-full text-center tracking-widest text-lg font-bold px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#8B1E2D]/20 focus:border-[#8B1E2D] transition"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#8B1E2D] hover:bg-[#73121F] disabled:opacity-60 px-5 py-3 text-sm font-semibold text-white shadow-md shadow-[#8B1E2D]/20 transition cursor-pointer"
-                  >
-                    {loading ? "Verifying..." : "Verify & Sign In"}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOtpSent(false);
-                      setMessage(null);
-                    }}
-                    className="w-full text-center text-xs text-gray-500 hover:text-[#8B1E2D] transition cursor-pointer"
-                  >
-                    ← Re-enter email
-                  </button>
-                </form>
+                <span>Sign In →</span>
               )}
-            </>
-          )}
+            </button>
 
-
+            {/* Switch Mode Link */}
+            <div className="flex items-center justify-center text-xs pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setMode(mode === "signin" ? "signup" : "signin");
+                  setMessage(null);
+                }}
+                className="text-[#8B1E2D] hover:underline font-semibold cursor-pointer"
+              >
+                {mode === "signin"
+                  ? "Need an account? Create Account"
+                  : "Already have an account? Sign In"}
+              </button>
+            </div>
+          </form>
 
           {/* Footer Back Link */}
           <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
