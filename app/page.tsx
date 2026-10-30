@@ -108,6 +108,105 @@ function LabFlaskIcon({ className = "w-5 h-5" }: { className?: string }) {
   );
 }
 
+// 3D Flippable Instagram-style Avatar (Default Image on front, Monogram Logo on back)
+function FlippableProfileAvatar({
+  imageSrc,
+  name,
+  monogram,
+  gradientClass,
+  sizeClass = "w-16 h-16 sm:w-18 sm:h-18",
+  ringClass = "ring-rose-100",
+  shadowClass = "shadow-[#8B1E2D]/35",
+  imgPosition = "object-center",
+  textClass = "text-xl",
+}: {
+  imageSrc: string;
+  name: string;
+  monogram: string;
+  gradientClass: string;
+  sizeClass?: string;
+  ringClass?: string;
+  shadowClass?: string;
+  imgPosition?: string;
+  textClass?: string;
+}) {
+  const [flipped, setFlipped] = useState(false);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      title="Click to flip (Photo ↔ Monogram)"
+      aria-label={`Flip profile avatar for ${name}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        setFlipped((f) => !f);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          e.stopPropagation();
+          setFlipped((f) => !f);
+        }
+      }}
+      className={`relative ${sizeClass} cursor-pointer select-none shrink-0 group/avatar rounded-2xl transition-transform duration-300 hover:scale-105 active:scale-95`}
+      style={{ perspective: "1000px" }}
+    >
+      <div
+        className="relative w-full h-full transition-transform duration-700 ease-out"
+        style={{
+          transformStyle: "preserve-3d",
+          transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
+        }}
+      >
+        {/* Front Face: Real Photo (Default Visible) */}
+        <div
+          className={`absolute inset-0 w-full h-full rounded-2xl overflow-hidden shadow-lg ${shadowClass} ring-4 ${ringClass} bg-gray-100`}
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+          }}
+        >
+          <Image
+            src={imageSrc}
+            alt={name}
+            width={160}
+            height={160}
+            className={`w-full h-full object-cover ${imgPosition}`}
+            priority
+          />
+          {/* Subtle Instagram-style flip badge icon */}
+          <div
+            className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-black/60 backdrop-blur-xs text-white text-[10px] flex items-center justify-center font-bold shadow-xs border border-white/20 transition-transform duration-300 group-hover/avatar:scale-110"
+            title="Flip to logo"
+          >
+            ↻
+          </div>
+        </div>
+
+        {/* Back Face: Monogram Logo (Visible on Flip) */}
+        <div
+          className={`absolute inset-0 w-full h-full rounded-2xl bg-gradient-to-br ${gradientClass} text-white font-black ${textClass} flex items-center justify-center shadow-lg ${shadowClass} ring-4 ${ringClass}`}
+          style={{
+            backfaceVisibility: "hidden",
+            WebkitBackfaceVisibility: "hidden",
+            transform: "rotateY(180deg)",
+          }}
+        >
+          <span className="tracking-wider">{monogram}</span>
+          {/* Subtle Instagram-style flip badge icon */}
+          <div
+            className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-white/25 backdrop-blur-xs text-white text-[10px] flex items-center justify-center font-bold shadow-xs border border-white/30 transition-transform duration-300 group-hover/avatar:scale-110"
+            title="Flip to photo"
+          >
+            ↺
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   // Pre-seed state with initialRawProjects so page is NEVER empty on initial render
   const [projects, setProjects] = useState<Project[]>(() =>
@@ -1235,9 +1334,16 @@ export default function Home() {
             <div className="p-6 rounded-3xl border-2 border-rose-200 bg-gradient-to-br from-white via-rose-50/50 to-amber-50/30 hover:border-[#8B1E2D] shadow-sm hover:shadow-xl hover:shadow-rose-900/10 transition-all duration-300 flex items-center justify-between gap-5 group relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-rose-400/10 to-amber-400/10 rounded-full blur-2xl pointer-events-none" />
               <div className="flex items-center gap-5 min-w-0 relative z-10">
-                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-br from-[#8B1E2D] via-[#A82035] to-[#D92B45] text-white font-black text-xl flex items-center justify-center shadow-lg shadow-[#8B1E2D]/35 ring-4 ring-rose-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
-                  PL
-                </div>
+                <FlippableProfileAvatar
+                  imageSrc="/team/priya.png"
+                  name="Dr. Priya R. L."
+                  monogram="PL"
+                  gradientClass="from-[#8B1E2D] via-[#A82035] to-[#D92B45]"
+                  sizeClass="w-16 h-16 sm:w-18 sm:h-18"
+                  ringClass="ring-rose-100"
+                  shadowClass="shadow-[#8B1E2D]/35"
+                  imgPosition="object-center"
+                />
                 <div className="min-w-0">
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs mb-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -1270,9 +1376,16 @@ export default function Home() {
             <div className="p-6 rounded-3xl border-2 border-blue-200 bg-gradient-to-br from-white via-sky-50/50 to-indigo-50/30 hover:border-[#1E3A8A] shadow-sm hover:shadow-xl hover:shadow-blue-900/10 transition-all duration-300 flex items-center justify-between gap-5 group relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-400/10 to-indigo-400/10 rounded-full blur-2xl pointer-events-none" />
               <div className="flex items-center gap-5 min-w-0 relative z-10">
-                <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-2xl bg-gradient-to-br from-[#101D2C] via-[#1E3A8A] to-[#2563EB] text-white font-black text-xl flex items-center justify-center shadow-lg shadow-blue-900/35 ring-4 ring-blue-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
-                  RJ
-                </div>
+                <FlippableProfileAvatar
+                  imageSrc="/team/richard.png"
+                  name="Mr. Richard Joseph"
+                  monogram="RJ"
+                  gradientClass="from-[#101D2C] via-[#1E3A8A] to-[#2563EB]"
+                  sizeClass="w-16 h-16 sm:w-18 sm:h-18"
+                  ringClass="ring-blue-100"
+                  shadowClass="shadow-blue-900/35"
+                  imgPosition="object-top"
+                />
                 <div className="min-w-0">
                   <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-blue-50 text-blue-800 border border-blue-300 shadow-2xs mb-1.5">
                     <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
@@ -1318,18 +1431,32 @@ export default function Home() {
                   </p>
                 </div>
               </div>
-              <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-800 border border-indigo-200 shadow-2xs">
-                <span>⚡</span>
-                <span>Core Engineering Authors</span>
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/80 shadow-2xs">
+                  <span>↺</span>
+                  <span>Tap avatar to flip</span>
+                </span>
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-extrabold bg-gradient-to-r from-indigo-50 to-purple-50 text-indigo-800 border border-indigo-200 shadow-2xs">
+                  <span>⚡</span>
+                  <span>Core Engineering Authors</span>
+                </span>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               {/* 1. Krishna Lohana (Vibrant Coral / Sunset Glow) */}
               <div className="bg-gradient-to-br from-white via-orange-50/50 to-rose-50/30 rounded-2xl border-2 border-orange-200/90 hover:border-orange-500 p-5 flex items-center gap-4 shadow-sm hover:shadow-xl hover:shadow-orange-500/20 transition-all duration-300 group relative overflow-hidden">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#FF5E62] via-[#FF758C] to-[#FF9966] text-white font-black text-lg flex items-center justify-center shadow-lg shadow-orange-500/35 ring-4 ring-orange-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
-                  KL
-                </div>
+                <FlippableProfileAvatar
+                  imageSrc="/team/krishna.jpg"
+                  name="Krishna Lohana"
+                  monogram="KL"
+                  gradientClass="from-[#FF5E62] via-[#FF758C] to-[#FF9966]"
+                  sizeClass="w-14 h-14 sm:w-16 sm:h-16"
+                  ringClass="ring-orange-100"
+                  shadowClass="shadow-orange-500/35"
+                  imgPosition="object-top"
+                  textClass="text-lg"
+                />
                 <div className="min-w-0">
                   <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-orange-900 bg-orange-100/90 border border-orange-200 px-2 py-0.5 rounded-full mb-1">
                     Student Lead
@@ -1348,9 +1475,17 @@ export default function Home() {
 
               {/* 2. James Lijo (Vibrant Purple / Electric Violet Glow) */}
               <div className="bg-gradient-to-br from-white via-purple-50/50 to-violet-50/30 rounded-2xl border-2 border-purple-200/90 hover:border-purple-500 p-5 flex items-center gap-4 shadow-sm hover:shadow-xl hover:shadow-purple-500/20 transition-all duration-300 group relative overflow-hidden">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7F00FF] via-[#8A2BE2] to-[#E100FF] text-white font-black text-lg flex items-center justify-center shadow-lg shadow-purple-500/35 ring-4 ring-purple-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
-                  JL
-                </div>
+                <FlippableProfileAvatar
+                  imageSrc="/team/james.png"
+                  name="James Lijo"
+                  monogram="JL"
+                  gradientClass="from-[#7F00FF] via-[#8A2BE2] to-[#E100FF]"
+                  sizeClass="w-14 h-14 sm:w-16 sm:h-16"
+                  ringClass="ring-purple-100"
+                  shadowClass="shadow-purple-500/35"
+                  imgPosition="object-top"
+                  textClass="text-lg"
+                />
                 <div className="min-w-0">
                   <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-purple-900 bg-purple-100/90 border border-purple-200 px-2 py-0.5 rounded-full mb-1">
                     Student Lead
@@ -1369,9 +1504,17 @@ export default function Home() {
 
               {/* 3. Piyush Kandhari (Vibrant Magenta / Deep Crimson Glow) */}
               <div className="bg-gradient-to-br from-white via-pink-50/50 to-rose-50/30 rounded-2xl border-2 border-pink-200/90 hover:border-pink-500 p-5 flex items-center gap-4 shadow-sm hover:shadow-xl hover:shadow-pink-500/20 transition-all duration-300 group relative overflow-hidden">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D9138A] via-[#E91E63] to-[#800080] text-white font-black text-lg flex items-center justify-center shadow-lg shadow-pink-500/35 ring-4 ring-pink-100 group-hover:scale-105 group-hover:rotate-1 transition-transform shrink-0">
-                  PK
-                </div>
+                <FlippableProfileAvatar
+                  imageSrc="/team/piyush.png"
+                  name="Piyush Kandhari"
+                  monogram="PK"
+                  gradientClass="from-[#D9138A] via-[#E91E63] to-[#800080]"
+                  sizeClass="w-14 h-14 sm:w-16 sm:h-16"
+                  ringClass="ring-pink-100"
+                  shadowClass="shadow-pink-500/35"
+                  imgPosition="object-top"
+                  textClass="text-lg"
+                />
                 <div className="min-w-0">
                   <span className="inline-block text-[10px] font-extrabold uppercase tracking-wider text-pink-900 bg-pink-100/90 border border-pink-200 px-2 py-0.5 rounded-full mb-1">
                     Student Lead
