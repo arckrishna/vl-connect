@@ -57,6 +57,11 @@ export async function GET(request) {
           virtualLab = rawMatch.virtualLab;
         }
 
+        let architecture = row.architecture || rawMatch?.architecture || "";
+        if (rawMatch?.architecture && (!architecture || architecture.includes("1Vk6XvulD0rJfJaQTzs5rRWz8ltBxa8W7"))) {
+          architecture = rawMatch.architecture;
+        }
+
         return {
           group: String(row.original_group || row.group_number),
           groupNumber: row.group_number,
@@ -65,7 +70,7 @@ export async function GET(request) {
           student2: student2 || rawMatch?.student2 || "",
           virtualLab: virtualLab || rawMatch?.virtualLab || "",
           feasibility: row.feasibility || rawMatch?.feasibility || "",
-          architecture: row.architecture || rawMatch?.architecture || "",
+          architecture: architecture,
           report: row.report || rawMatch?.report || "",
           mentor: row.mentor || "Department of Computer Engineering",
         };

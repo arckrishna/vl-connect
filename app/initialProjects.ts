@@ -18,7 +18,7 @@ export const initialRawProjects: RawProject[] = [
     "student2": "Neha Karkhanis",
     "title": "LSM-Tree Storage Engine over Object Storage",
     "feasibility": "https://docs.google.com/document/d/1b9e-8tFBF5M9lhGAKXHlwbCBg1pNyvCf9SBbhOrw9hI/edit?usp=sharing",
-    "architecture": "https://drive.google.com/file/d/1Vk6XvulD0rJfJaQTzs5rRWz8ltBxa8W7/view?usp=sharing",
+    "architecture": "https://drive.google.com/file/d/1Hd2XUXoui_KpBahwMAZqvMKX0ABV1IpQ/view?usp=drivesdk",
     "report": "https://docs.google.com/document/d/1lkFxkuFFfDYcb6RldLCiXz2PvrrfCfA7vlLMI28rvpA/edit?usp=sharing",
     "virtualLab": "https://breakscale.tech/?s=7DHFQBUjGAB2bg#k=HbL_86S-uT1mHvZxmnXarg",
     "mentor": "Department of Computer Engineering"
