@@ -119,7 +119,7 @@ export const initialRawProjects: RawProject[] = [
     "feasibility": "/Feasibility_reports/chunk_level_storage_deduplication_engine_virtual_lab.html",
     "architecture": "/architecture/group-10-storage-dedup.jpeg",
     "report": "/reports/chunk-level-storage-deduplication.html",
-    "virtualLab": "https://breakscale.tech/?s=8pMPySiOi5Qvig#k=l_HoBkc_QEt1gATdX9E41A",
+    "virtualLab": "https://breakscale.tech/?s=4c29bXUapYcH6Q#k=K22dhLGUqpvzuhL_D3STzw",
     "mentor": "Department of Computer Engineering"
   },
   {
