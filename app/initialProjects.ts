@@ -169,7 +169,7 @@ export const initialRawProjects: RawProject[] = [
   {
     "group": "15",
     "student1": "Tanvi Jagade",
-    "student2": "Riya bhatt",
+    "student2": "Riya Bhatt",
     "title": "Real time pub/sub websocket gateway",
     "feasibility": "/Feasibility_reports/real_time_pubsub_websocket_gateway_mini_discord_virtual_lab.html",
     "architecture": "/architecture/group-15-websocket-gateway.jpeg",
