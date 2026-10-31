@@ -1,0 +1,1902 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Tracing & Telemetry Collector</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.35)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.35)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.35)',
+              'glow-amber': '0 0 25px -5px rgba(245, 158, 11, 0.35)',
+              'glow-rose': '0 0 25px -5px rgba(244, 63, 94, 0.35)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      /* Custom Scrollbar & Design Aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.35);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.25);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+
+      .search-highlight {
+        background-color: rgba(245, 158, 11, 0.35);
+        color: #FDE68A;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    <i class="fa-solid fa-network-wired text-sm"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Distributed Tracing & Telemetry Collector
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">TraceLab</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">System Architecture & Telemetry Pipeline Documentation</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Simulator Jump Button -->
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Telemetry Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Overview & Header</a>
+                            <a href="#abstract" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Abstract & Document Map</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Problem & Objectives</a>
+                            <a href="#theory" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Theoretical Background</a>
+                            <a href="#requirements" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Requirements & Boundaries</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. System Architecture (Fig 1)</a>
+                            <a href="#workflows" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Processing Workflows</a>
+                            <a href="#simulation-design" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Simulation Design & Method</a>
+                            <a href="#observation" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Observation & Result Record</a>
+                            <a href="#testing" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Testing & Evaluation</a>
+                            <a href="#feasibility" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">10. Feasibility & Risks</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">11. Conclusion & Future Work</a>
+                            <a href="#appendices" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">12. References & Appendices</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 13. Telemetry Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Author Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Project Metadata</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Project Guide</span>
+                                <span class="text-slate-200 font-semibold">Mrs. Priya R.L.</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Submitted By</span>
+                                <span class="text-slate-200 font-medium block">Anuj Ghagare (Roll 13)</span>
+                                <span class="text-slate-200 font-medium block">Kunal Singh (Roll 60)</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Dept: D12A-CMPN</span>
+                                <span class="text-brand-indigo font-mono">Academic 2026</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">0. Overview & Header</a>
+                        <a href="#abstract" class="mobile-toc-link block py-2 text-slate-300">1. Abstract & Document Map</a>
+                        <a href="#introduction" class="mobile-toc-link block py-2 text-slate-300">2. Problem & Objectives</a>
+                        <a href="#theory" class="mobile-toc-link block py-2 text-slate-300">3. Theoretical Background</a>
+                        <a href="#requirements" class="mobile-toc-link block py-2 text-slate-300">4. Requirements & Boundaries</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">5. System Architecture (Fig 1)</a>
+                        <a href="#workflows" class="mobile-toc-link block py-2 text-slate-300">6. Processing Workflows</a>
+                        <a href="#simulation-design" class="mobile-toc-link block py-2 text-slate-300">7. Simulation Design & Method</a>
+                        <a href="#observation" class="mobile-toc-link block py-2 text-slate-300">8. Observation & Result Record</a>
+                        <a href="#testing" class="mobile-toc-link block py-2 text-slate-300">9. Testing & Evaluation</a>
+                        <a href="#feasibility" class="mobile-toc-link block py-2 text-slate-300">10. Feasibility & Risks</a>
+                        <a href="#conclusion" class="mobile-toc-link block py-2 text-slate-300">11. Conclusion & Future Work</a>
+                        <a href="#appendices" class="mobile-toc-link block py-2 text-slate-300">12. References & Appendices</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">13. Live Telemetry Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-microchip"></i> Academic Engineering Report
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                OpenTelemetry / OTLP
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Telemetry Collector Pipeline
+                            </span>
+                        </div>
+
+                        <!-- Paper Title -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Distributed Tracing & <span class="gradient-text">Telemetry Collector</span>
+                        </h1>
+
+                        <!-- Subtitle / Meta Summary -->
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            Distributed Tracing & Telemetry Collector Pipeline — System architecture, simulation methodology and evaluation plan for OpenTelemetry OTLP processing, bounded queues, sampling, load balancing, and failure analysis.
+                        </p>
+
+                        <!-- Authors & Details Grid -->
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Project Guide</span>
+                                <span class="text-white font-bold text-sm block">Mrs. Priya R.L.</span>
+                                <span class="text-slate-400 block text-[11px]">Department of Computer Engineering</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Submitted By</span>
+                                <span class="text-white font-semibold block">Anuj Ghagare (Roll 13)</span>
+                                <span class="text-white font-semibold block">Kunal Singh (Roll 60)</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Environment & Class</span>
+                                <span class="text-slate-200 block font-semibold">D12A-CMPN • Academic 2026</span>
+                                <span class="text-brand-indigo font-mono">TraceLab Environment</span>
+                            </div>
+                        </div>
+
+                        <!-- Hero Action Controls -->
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Telemetry Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore Pipeline Architecture (Fig 1)
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. ABSTRACT & DOCUMENT MAP -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Abstract & Document Map</h2>
+                            <p class="text-xs text-slate-400">Executive summary, key terms, and report structural map</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            <strong class="text-white">TraceLab</strong> is a Distributed Tracing Virtual Lab that illustrates how telemetry produced by an application travels through a collection pipeline. The proposed model contains an instrumented service graph (API gateway, order service, payment service, inventory service, and database), OTLP transport over gRPC/HTTP, a least-buffered load balancer, two collector replicas, a trace backend, and a trace explorer.
+                        </p>
+                        <p>
+                            A separate self-monitoring path represents collector counters and gauges flowing to a Prometheus-compatible metrics backend and dashboard. The lab focuses on sampling, batching, bounded queues, throughput, and component failures. This report explains the core concepts, architecture, processing flow, requirements, experimental procedure, and evaluation metrics. The supplied interface reports a local simulation environment, allowing for rigorous baseline measurement and controlled failure testing.
+                        </p>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs">
+                            <strong class="text-brand-indigo block mb-1">Keywords:</strong>
+                            <span class="text-slate-400">Distributed tracing, OpenTelemetry, OTLP, telemetry pipeline, collector, sampling, batching, bounded queue, observability.</span>
+                        </div>
+                    </div>
+
+                    <!-- Document Map Grid -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Document Map Overview</h4>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 text-[11px] font-mono">
+                            <a href="#introduction" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">1. Introduction</a>
+                            <a href="#theory" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">2. Theory</a>
+                            <a href="#requirements" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">3. Requirements</a>
+                            <a href="#architecture" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">4. Architecture</a>
+                            <a href="#workflows" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">5. Workflows</a>
+                            <a href="#simulation-design" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">6. Simulation Method</a>
+                            <a href="#observation" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">7. Observations</a>
+                            <a href="#testing" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">8. Testing</a>
+                            <a href="#feasibility" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">9. Feasibility</a>
+                            <a href="#conclusion" class="p-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-brand-indigo text-slate-300 text-center transition">10. Conclusion</a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. INTRODUCTION & PROBLEM DEFINITION -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Introduction & Problem Definition</h2>
+                            <p class="text-xs text-slate-400">Context, problem statement, aim, and core objectives</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            A modern application request is usually processed by several cooperating components rather than one program. For example, an API gateway may call an order service, which then contacts a payment service, an inventory service, and a database. If a request becomes slow, application logs from one service may not explain where the time was spent. Distributed tracing addresses this limitation by connecting work across services into a trace composed of related spans.
+                        </p>
+                        <p>
+                            Telemetry must itself be transported and processed. Instrumented services emit spans, an exporter sends them through OTLP, a collector receives and processes them, and an exporter forwards them to a trace backend. At high input rates, collectors can become a bottleneck. Sampling intentionally retains only a subset of traces; batching groups telemetry for export; queues absorb temporary differences between input and output rates; retries handle transient failures.
+                        </p>
+                    </div>
+
+                    <!-- Problem Statement Box -->
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-indigo/10 via-brand-violet/10 to-transparent border border-brand-indigo/30 space-y-2">
+                        <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-question"></i> 1.1 Problem Statement
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            "A distributed application needs an end-to-end view of a request, but its telemetry pipeline has finite processing and buffering capacity. Poor sampling choices can hide work, insufficient collector capacity can create queues and losses, and a slow or unavailable backend can delay exports. TraceLab models these trade-offs so a learner can change the pipeline configuration, inject failures, and analyse how much visibility is retained."
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-bullseye text-brand-emerald"></i> 1.2 Aim
+                            </h4>
+                            <p class="text-slate-400">
+                                To study and simulate a distributed tracing and telemetry collection pipeline, understand how traces flow across microservices and OpenTelemetry Collectors, and evaluate the impact of sampling, batching, collector capacity, and component failures on telemetry collection.
+                            </p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-compass text-brand-cyan"></i> 1.4 Scope & Boundaries
+                            </h4>
+                            <p class="text-slate-400">
+                                The current scope is a browser-based local simulation. The architecture is a learning model rather than a claim that a production OpenTelemetry deployment is running. The report includes no real customer data, credentials, or remote backends.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Objectives Grid -->
+                    <div class="space-y-3 pt-2">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">1.3 Project Objectives</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <span>Explain trace IDs, span IDs, and parent-child relationships in multi-service requests.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <span>Describe the role of instrumentation, OTLP, and receiver-processor-exporter pipelines.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <span>Compare how two collector replicas receive and export spans through a least-buffered load balancer.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <span>Observe sampling, batching, bounded queue capacity, and retry/failure behavior.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <span>Interpret collector self-monitoring counters and gauges through a simulated dashboard.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <span>Compare baseline runs with experimental configurations using numeric observations.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. THEORETICAL BACKGROUND -->
+                <section id="theory" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Theoretical Background</h2>
+                            <p class="text-xs text-slate-400">OpenTelemetry fundamentals, span structures, collector pipeline stages</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-nested text-brand-indigo"></i> 2.1 Traces &amp; Spans
+                            </h4>
+                            <p class="text-slate-400">
+                                A trace represents the end-to-end path of one request. A span represents an operation. Trace IDs group spans; span IDs identify one span; parent span IDs represent causal relationships.
+                            </p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-link text-brand-violet"></i> 2.2 Propagation &amp; OTLP
+                            </h4>
+                            <p class="text-slate-400">
+                                Instrumentation creates spans and propagates trace context to downstream calls. OpenTelemetry Protocol (OTLP) transports telemetry over gRPC/HTTP endpoints.
+                            </p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-brand-emerald"></i> 2.6 Self-Monitoring
+                            </h4>
+                            <p class="text-slate-400">
+                                Separate dashed path exposes operational metrics (accepted/dropped spans, queue utilization) to Prometheus backends to monitor the observability infrastructure itself.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Pipeline Stages Table -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-cubes text-brand-cyan"></i> 2.4 Collector Pipeline Stages
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Stage</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Role in TraceLab</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Questions to Investigate</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">Receiver</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Accepts spans arriving over the OTLP endpoint.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">How many spans enter? Is the receiver overwhelmed?</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-violet font-bold">Processor: Sampling</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Decides which traces/spans are retained according to model.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">How does retained-to-generated ratio change with probability?</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-cyan font-bold">Processor: Batching</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Groups spans before export.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Does batch size change export frequency, queue occupancy, or delay?</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-amber font-bold">Bounded Queue &amp; Retries</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Buffers exports during slowdowns and models retry behavior.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">When does the queue fill? What happens while backend is down?</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-emerald font-bold">Exporter</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Sends telemetry to the trace backend.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">How many spans are exported, delayed, or dropped?</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-rose font-bold">Self-Monitoring Metrics</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Reports counters/gauges about the collector pipeline.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Can the dashboard reveal saturation before visibility degrades?</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. REQUIREMENTS AND SYSTEM BOUNDARIES -->
+                <section id="requirements" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. Requirements & System Boundaries</h2>
+                            <p class="text-xs text-slate-400">Functional criteria FR-01..FR-08, NFRs, and scope boundaries</p>
+                        </div>
+                    </div>
+
+                    <!-- Functional Requirements Table -->
+                    <div class="space-y-3">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-brand-indigo"></i> 3.1 Functional Requirements Matrix
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-16">ID</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Requirement</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Verification Evidence</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-01</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Represent example request across named services</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Trace tree shows gateway, order, payment, inventory, DB spans.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-02</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Telemetry export to OTLP endpoint over gRPC/HTTP</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Configuration view identifies endpoint &amp; protocol.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-03</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Distribute input using least-buffered selection</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Per-replica counters change consistent with queue-load rule.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-04</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Expose configurable sampling behavior</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Different probability produces changes in retained volume.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-05</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Model batching and bounded queue capacity</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Batch/queue state or effects observable during simulation.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-06</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Represent backend slowness/failure &amp; retries</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Observation table records queue growth, drops, recovery.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-07</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Expose collector self-monitoring metrics</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Metric counters/gauges correspond to simulated events.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">FR-08</td>
+                                        <td class="px-4 py-2.5 text-white font-semibold">Allow experiment reset &amp; repeatable comparison</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Reset returns pipeline state to clean baseline.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- System Boundaries Table -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-border-all text-brand-violet"></i> 3.3 System Boundaries (Inside vs Outside)
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/2">Inside the simulation boundary</th>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/2">Outside the current boundary</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Service request graph &amp; span relationships</td>
+                                        <td class="px-4 py-2.5 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Real application business logic or customer requests</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> OTLP path, load balancer, simulated collectors</td>
+                                        <td class="px-4 py-2.5 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Production networking, TLS, auth, cluster security</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Sampling / batch / queue / failure parameters</td>
+                                        <td class="px-4 py-2.5 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Operational SLA or uptime guarantees</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Trace backend &amp; explorer representation</td>
+                                        <td class="px-4 py-2.5 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Integration with remote production backends</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Collector metric endpoint &amp; dashboard</td>
+                                        <td class="px-4 py-2.5 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> A running Prometheus server unless separately set up</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. SYSTEM ARCHITECTURE (FIGURE 1 PRESERVED DIAGRAM) -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                                05
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white">5. System Architecture</h2>
+                                <p class="text-xs text-slate-400">Figure 1 Preserved — TraceLab Telemetry Collector Pipeline Architecture</p>
+                            </div>
+                        </div>
+
+                        <!-- Diagram View Tabs -->
+                        <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+                            <button class="arch-tab px-3 py-1.5 rounded-lg active font-semibold text-white bg-brand-indigo shadow transition whitespace-nowrap" data-tab="fig1">
+                                Figure 1 (Full Pipeline)
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition whitespace-nowrap" data-tab="telemetry">
+                                Primary Telemetry Flow
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition whitespace-nowrap" data-tab="selfmon">
+                                Self-Monitoring Path
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition whitespace-nowrap" data-tab="failures">
+                                Failure &amp; Backpressure
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Diagram Canvas Container -->
+                    <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 relative overflow-x-auto min-h-[460px]">
+
+                        <!-- TAB 1: FIGURE 1 FULL ARCHITECTURE DIAGRAM -->
+                        <div id="arch-fig1" class="arch-pane space-y-6">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider">TraceLab Architecture Specification</span>
+                                <h3 class="text-base font-bold text-white">Figure 1. TraceLab Distributed Tracing &amp; Telemetry Collector Pipeline</h3>
+                            </div>
+
+                            <!-- Full Architecture Diagram Representation -->
+                            <div class="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-6 min-w-[820px]">
+                                
+                                <!-- Top Row: 5 Main Blocks -->
+                                <div class="grid grid-cols-12 gap-3 items-stretch">
+                                    
+                                    <!-- Block 1: Instrumented App -->
+                                    <div class="col-span-3 p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
+                                        <div class="flex items-center justify-between border-b border-slate-700 pb-1.5">
+                                            <span class="text-xs font-bold text-white flex items-center gap-1.5">
+                                                <span class="w-4 h-4 rounded bg-brand-indigo text-white text-[10px] flex items-center justify-center font-bold">1</span>
+                                                INSTRUMENTED APPLICATION
+                                            </span>
+                                        </div>
+                                        <div class="text-[10px] text-slate-400">OpenTelemetry SDKs create spans</div>
+                                        <div class="space-y-1 text-[10px] font-mono">
+                                            <div class="p-1.5 rounded bg-slate-900 border border-slate-800 flex items-center justify-between">
+                                                <span>API gateway</span>
+                                                <i class="fa-solid fa-arrow-right text-brand-indigo text-[9px]"></i>
+                                                <span>order-service</span>
+                                            </div>
+                                            <div class="grid grid-cols-2 gap-1 text-center">
+                                                <div class="p-1 rounded bg-slate-900 border border-slate-800 text-slate-300">payment-service</div>
+                                                <div class="p-1 rounded bg-slate-900 border border-slate-800 text-slate-300">inventory-service</div>
+                                            </div>
+                                            <div class="p-1 rounded bg-slate-900 border border-slate-800 text-center text-amber-300 font-bold">
+                                                database
+                                            </div>
+                                        </div>
+                                        <div class="text-[9px] text-slate-400 italic text-center">Trace ID + parent/child span links</div>
+                                    </div>
+
+                                    <!-- Arrow -> -->
+                                    <div class="col-span-1 flex flex-col items-center justify-center text-brand-indigo text-lg">
+                                        <i class="fa-solid fa-arrow-right"></i>
+                                        <span class="text-[9px] text-slate-400 font-mono">OTLP</span>
+                                    </div>
+
+                                    <!-- Block 2: OTLP Transport & Load Balancer -->
+                                    <div class="col-span-2 p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2 text-center flex flex-col justify-between">
+                                        <div class="flex items-center justify-center gap-1 border-b border-slate-700 pb-1.5">
+                                            <span class="w-4 h-4 rounded bg-brand-violet text-white text-[10px] flex items-center justify-center font-bold">2</span>
+                                            <span class="text-xs font-bold text-white">OTLP</span>
+                                        </div>
+                                        <div class="space-y-1 text-[10px]">
+                                            <div class="p-1.5 rounded bg-slate-900 border border-slate-800 font-mono text-slate-300">gRPC / HTTP export endpoint</div>
+                                            <div class="p-1.5 rounded bg-brand-violet/20 border border-brand-violet/40 font-bold text-violet-300">
+                                                Load balancer: least-buffered
+                                            </div>
+                                        </div>
+                                        <div class="text-[9px] text-slate-400">Routes to lowest queue</div>
+                                    </div>
+
+                                    <!-- Arrow -> -->
+                                    <div class="col-span-1 flex flex-col items-center justify-center text-brand-violet text-lg">
+                                        <i class="fa-solid fa-arrow-right"></i>
+                                    </div>
+
+                                    <!-- Block 3: Collector Replicas x2 -->
+                                    <div class="col-span-5 p-3.5 rounded-xl bg-brand-indigo/10 border border-brand-indigo/30 space-y-2">
+                                        <div class="flex items-center justify-between border-b border-brand-indigo/20 pb-1.5">
+                                            <span class="text-xs font-bold text-brand-indigo flex items-center gap-1.5">
+                                                <span class="w-4 h-4 rounded bg-brand-indigo text-white text-[10px] flex items-center justify-center font-bold">3</span>
+                                                COLLECTOR REPLICAS x2
+                                            </span>
+                                            <span class="text-[9px] bg-brand-indigo/20 text-indigo-300 px-1.5 py-0.5 rounded font-mono">Parallel</span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                                            <!-- Replica 1 -->
+                                            <div class="p-2 rounded-lg bg-slate-900 border border-slate-700 space-y-1">
+                                                <div class="font-bold text-white text-center border-b border-slate-800 pb-0.5">collector-1</div>
+                                                <div class="text-[9px] text-slate-400 text-center">queue / capacity</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-slate-300">Receiver: OTLP</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-slate-300">Processors: sampling + batch</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-amber-300">Bounded queue: buffer + retries</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-emerald-300">Exporter: send to backend</div>
+                                            </div>
+                                            <!-- Replica 2 -->
+                                            <div class="p-2 rounded-lg bg-slate-900 border border-slate-700 space-y-1">
+                                                <div class="font-bold text-white text-center border-b border-slate-800 pb-0.5">collector-2</div>
+                                                <div class="text-[9px] text-slate-400 text-center">queue / capacity</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-slate-300">Receiver: OTLP</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-slate-300">Processors: sampling + batch</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-amber-300">Bounded queue: buffer + retries</div>
+                                                <div class="bg-slate-800 p-1 rounded text-[9px] text-emerald-300">Exporter: send to backend</div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+
+                                <!-- Arrow & Right Side Blocks (Trace Backend & Explorer) -->
+                                <div class="grid grid-cols-12 gap-3 items-center">
+                                    <div class="col-span-7 flex justify-end text-brand-emerald pr-6">
+                                        <span class="text-[10px] text-slate-400 font-mono mr-2">Export Batches</span>
+                                        <i class="fa-solid fa-arrow-right text-lg"></i>
+                                    </div>
+                                    <div class="col-span-5 grid grid-cols-2 gap-2 text-xs">
+                                        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 space-y-1">
+                                            <div class="font-bold text-white flex items-center gap-1">
+                                                <span class="w-4 h-4 rounded bg-brand-emerald text-white text-[10px] flex items-center justify-center font-bold">4</span>
+                                                TRACE BACKEND
+                                            </div>
+                                            <p class="text-[10px] text-slate-400">Stores / indexes exported traces; accepting state shown in preview.</p>
+                                        </div>
+                                        <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 space-y-1">
+                                            <div class="font-bold text-white flex items-center gap-1">
+                                                <span class="w-4 h-4 rounded bg-brand-cyan text-white text-[10px] flex items-center justify-center font-bold">5</span>
+                                                TRACE EXPLORER
+                                            </div>
+                                            <p class="text-[10px] text-slate-400">Search trace ID, inspect span tree, compare service durations.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bottom Section: Collector Self-Monitoring (Dashed Path) -->
+                                <div class="p-4 rounded-xl bg-slate-900/90 border border-dashed border-slate-700 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                        <span class="text-xs font-bold text-brand-rose flex items-center gap-2">
+                                            <i class="fa-solid fa-[#F43F5E] fa-chart-line"></i> COLLECTOR SELF-MONITORING (DASHED PATH)
+                                        </span>
+                                        <span class="text-[9px] text-slate-400 font-mono">Operational Signals: accepted/exported/dropped spans, queue utilization, throughput</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3 text-xs">
+                                        <div class="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-1">
+                                            <div class="font-bold text-white text-[11px]">Collector metrics endpoint</div>
+                                            <p class="text-[10px] text-slate-400">Counters + gauges; simulated telemetry pipeline health.</p>
+                                        </div>
+                                        <div class="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-1">
+                                            <div class="font-bold text-white text-[11px]">Metrics backend</div>
+                                            <p class="text-[10px] text-slate-400">Prometheus-compatible scrape / store metrics.</p>
+                                        </div>
+                                        <div class="p-2.5 rounded-lg bg-slate-800/80 border border-slate-700 space-y-1">
+                                            <div class="font-bold text-white text-[11px]">Monitoring dashboard</div>
+                                            <p class="text-[10px] text-slate-400">Graphs, threshold alerts: queue / drop / export health.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Simulation Boundary Banner -->
+                                <div class="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] text-amber-300 text-center font-mono">
+                                    SIMULATION BOUNDARY: All blocks and entities shown are represented as browser-based local simulation components; the diagram does not imply a production deployment.
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: TELEMETRY FLOW -->
+                        <div id="arch-telemetry" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider block text-center">Primary Telemetry Flow (Step-by-Step Request Lifecycle)</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-7 gap-2 text-xs">
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                                    <span class="text-[10px] font-bold text-brand-indigo">1. Request</span>
+                                    <p class="text-slate-400 text-[10px]">Client HTTP call enters API Gateway.</p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                                    <span class="text-[10px] font-bold text-brand-indigo">2. Instrument</span>
+                                    <p class="text-slate-400 text-[10px]">Services generate spans &amp; trace context.</p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                                    <span class="text-[10px] font-bold text-brand-violet">3. OTLP Export</span>
+                                    <p class="text-slate-400 text-[10px]">Spans sent over gRPC/HTTP endpoint.</p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                                    <span class="text-[10px] font-bold text-brand-violet">4. Routing</span>
+                                    <p class="text-slate-400 text-[10px]">Load Balancer routes to least-buffered collector.</p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                                    <span class="text-[10px] font-bold text-brand-cyan">5. Process</span>
+                                    <p class="text-slate-400 text-[10px]">Sampling &amp; batching applied; queued.</p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                                    <span class="text-[10px] font-bold text-brand-emerald">6. Export/Retry</span>
+                                    <p class="text-slate-400 text-[10px]">Batches sent to trace backend.</p>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                                    <span class="text-[10px] font-bold text-brand-emerald">7. Explore</span>
+                                    <p class="text-slate-400 text-[10px]">Traces inspected in trace explorer UI.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: SELF MON -->
+                        <div id="arch-selfmon" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-rose uppercase tracking-wider block text-center">Self-Monitoring Pipeline (Prometheus Metrics Flow)</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                                    <h4 class="font-bold text-brand-rose text-sm">Step 1: Metric Exposure</h4>
+                                    <p class="text-slate-400">Collectors expose internal operational metrics including accepted spans, exported spans, queue depth, and drop counters.</p>
+                                </div>
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                                    <h4 class="font-bold text-brand-amber text-sm">Step 2: Metric Scraping</h4>
+                                    <p class="text-slate-400">The simulated Prometheus metrics backend periodically scrapes or receives time-series measurements from collector endpoints.</p>
+                                </div>
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                                    <h4 class="font-bold text-brand-emerald text-sm">Step 3: Alert &amp; Dashboard</h4>
+                                    <p class="text-slate-400">The monitoring dashboard renders real-time queue utilization, exporter error rates, and pipeline throughput graphs for operators.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 4: FAILURES -->
+                        <div id="arch-failures" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-amber uppercase tracking-wider block text-center">Failure Modes &amp; Backpressure Mechanics</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                                    <h4 class="font-bold text-brand-amber text-sm">Queue Saturation &amp; Overflow</h4>
+                                    <p class="text-slate-400">When input span rate exceeds export throughput, bounded queues absorb the difference until full, at which point backpressure or span drops occur.</p>
+                                </div>
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                                    <h4 class="font-bold text-brand-rose text-sm">Backend Outage &amp; Retries</h4>
+                                    <p class="text-slate-400">If the trace backend becomes unavailable, exporters enter exponential retry loops, filling local bounded queues and triggering drop policies if sustained.</p>
+                                </div>
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5">
+                                    <h4 class="font-bold text-brand-violet text-sm">Collector Replica Failure</h4>
+                                    <p class="text-slate-400">If collector-2 crashes, the least-buffered load balancer automatically redirects 100% of telemetry traffic to collector-1, testing single-replica capacity.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Architecture Components Table -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-brand-indigo"></i> 4.1 Architecture Subsystem Component Responsibilities
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Component</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Responsibility</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Key Evidence / State</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Instrumented services</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Generate spans &amp; propagate trace context across API gateway, order, payment, inventory, DB.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Trace ID, parent-child links, service spans</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">OTLP endpoint</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Receives exported telemetry using modeled gRPC/HTTP route.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Input span count &amp; protocol config</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Least-buffered load balancer</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Selects collector replica based on queue-load indicator.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Per-replica traffic distribution ratio</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Collector replicas x2</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Run receiver, processor (sampling/batching), queue/retry, and exporter stages.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Queue utilization, accepted/exported/dropped spans</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Trace backend</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Accepts and stores/indexes exported trace data.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Backend availability state &amp; stored spans</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Trace explorer</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Displays traces, span trees, and service durations.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Trace search &amp; span tree view</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Metrics backend/dashboard</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Represents collector self-monitoring path independently from trace data.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Counters, gauges, queue/exporter alerts</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. PROCESSING WORKFLOWS -->
+                <section id="workflows" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. Processing Workflows</h2>
+                            <p class="text-xs text-slate-400">Detailed steps for primary trace flow, self-monitoring, and failure modes</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <h4 class="text-base font-bold text-white">5.1 Primary Trace Telemetry Path</h4>
+                        <ol class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs list-decimal list-inside">
+                            <li class="p-3 rounded-xl bg-slate-900/60 border border-slate-800"><strong class="text-white">Request Entry:</strong> A simulated client request enters `api-gateway`.</li>
+                            <li class="p-3 rounded-xl bg-slate-900/60 border border-slate-800"><strong class="text-white">Instrumentation:</strong> Services create spans and propagate trace context downstream.</li>
+                            <li class="p-3 rounded-xl bg-slate-900/60 border border-slate-800"><strong class="text-white">OTLP Export:</strong> Services send telemetry over modeled gRPC/HTTP endpoints.</li>
+                            <li class="p-3 rounded-xl bg-slate-900/60 border border-slate-800"><strong class="text-white">Routing:</strong> Load balancer routes to `collector-1` or `collector-2` based on lowest queue.</li>
+                            <li class="p-3 rounded-xl bg-slate-900/60 border border-slate-800"><strong class="text-white">Processing:</strong> Collector applies sampling/batching, then enqueues to bounded queue.</li>
+                            <li class="p-3 rounded-xl bg-slate-900/60 border border-slate-800"><strong class="text-white">Export / Retry:</strong> Exporter sends batches to backend; outages cause retries/queue growth.</li>
+                            <li class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 sm:col-span-2"><strong class="text-white">Exploration:</strong> Trace explorer displays retained, delivered spans and service trees.</li>
+                        </ol>
+
+                        <div class="pt-4 border-t border-slate-800 space-y-2">
+                            <h4 class="text-base font-bold text-white">5.3 Behavior Under Pressure or Component Failure</h4>
+                            <p class="text-slate-400 text-xs leading-relaxed">
+                                When input rate rises above sustained export throughput, backlog can grow. Increasing queue capacity may absorb a longer temporary outage but also consumes more memory in a real implementation. Batching can increase throughput efficiency while introducing waiting time for batch formation. Sampling reduces the volume retained for downstream processing but also lowers visibility. A collector failure may reduce total capacity or force traffic to the remaining replica. A backend failure may grow queues and trigger retries; if capacity or retry limits are reached, telemetry can be lost.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. SIMULATION DESIGN AND EXPERIMENTAL METHOD -->
+                <section id="simulation-design" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Simulation Design & Experimental Method</h2>
+                            <p class="text-xs text-slate-400">Variables matrix, standard procedure, and recommended experiment matrix</p>
+                        </div>
+                    </div>
+
+                    <!-- Variables Matrix -->
+                    <div class="space-y-3">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-[#10B981] fa-sliders text-brand-emerald"></i> 6.1 Variables Specification Matrix
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/4">Variable Class</th>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/2">Examples</th>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/4">Control Method</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-brand-indigo">Independent / Configurable</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Sampling probability, batch size/flush timing, queue capacity, input load, collector availability, backend latency/availability.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Change 1 factor at a time</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-brand-violet">Dependent / Observed</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Generated/accepted/exported/dropped spans, queue utilization, throughput, export delay, recovery time, visible trace count.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Read from lab dashboard</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-brand-emerald">Controlled</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Service graph, workload, run duration, initial state, random seed when available.</td>
+                                        <td class="px-4 py-2.5 text-slate-400 font-mono">Keep fixed across runs</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Recommended Experiment Matrix Table -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-flask text-brand-violet"></i> 6.3 Recommended Experiment Matrix (E0..E5)
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Run ID</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Configuration Change</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Hold Constant</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Primary Observations</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">E0-Baseline</td>
+                                        <td class="px-4 py-2.5 text-white">Default settings; no injected failures</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Default workload &amp; graph</td>
+                                        <td class="px-4 py-2.5 text-slate-300 font-mono">Generated, accepted, exported spans; queue</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">E1-Sampling</td>
+                                        <td class="px-4 py-2.5 text-white">Change sampling probability only</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Same workload &amp; collectors</td>
+                                        <td class="px-4 py-2.5 text-slate-300 font-mono">Retained fraction, trace count, latency</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">E2-Batching</td>
+                                        <td class="px-4 py-2.5 text-white">Change batch size or flush setting</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Same input rate &amp; queue cap</td>
+                                        <td class="px-4 py-2.5 text-slate-300 font-mono">Batch count/size, queue depth, export delay</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">E3-Capacity</td>
+                                        <td class="px-4 py-2.5 text-white">Increase load or lower queue capacity</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Same sampling &amp; batching</td>
+                                        <td class="px-4 py-2.5 text-slate-300 font-mono">Queue saturation, throughput, dropped spans</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">E4-Backend Failure</td>
+                                        <td class="px-4 py-2.5 text-white">Make backend slow or unavailable</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Same workload &amp; collector cap</td>
+                                        <td class="px-4 py-2.5 text-slate-300 font-mono">Retry count, queue growth, drops, recovery</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">E5-Collector Failure</td>
+                                        <td class="px-4 py-2.5 text-white">Disable one collector replica</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Same LB policy &amp; workload</td>
+                                        <td class="px-4 py-2.5 text-slate-300 font-mono">Remaining replica load, loss/delay, recovery</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. OBSERVATION AND RESULT RECORD -->
+                <section id="observation" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Observation & Result Record</h2>
+                            <p class="text-xs text-slate-400">Experimental data collection record and interpretation guide</p>
+                        </div>
+                    </div>
+
+                    <!-- Observation Record Table -->
+                    <div class="space-y-3">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-clipboard-list text-brand-amber"></i> 7. Observation Data Table Template
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Run ID</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Configuration / Change</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Input / Generated Spans</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Queue Util Peak</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Exported Spans</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Dropped Spans</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Latency / Recovery</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">E0-Baseline</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Default settings</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">Recorded via Sim</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Low (&lt;20%)</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">Recorded via Sim</td>
+                                        <td class="px-4 py-2.5 text-slate-400">0</td>
+                                        <td class="px-4 py-2.5 text-slate-300">&lt;15 ms</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">E1-Sampling</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Sampling: 50%</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">Recorded via Sim</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Low (&lt;10%)</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">~50% of input</td>
+                                        <td class="px-4 py-2.5 text-slate-400">0 (Sampled out)</td>
+                                        <td class="px-4 py-2.5 text-slate-300">&lt;10 ms</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">E2-Batching</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Batch Size: 20</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">Recorded via Sim</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Medium (40%)</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">Recorded via Sim</td>
+                                        <td class="px-4 py-2.5 text-slate-400">0</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Flush window delay</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">E3-Capacity</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Load High, Queue cap 10</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">High (&gt;100/s)</td>
+                                        <td class="px-4 py-2.5 text-brand-rose font-bold">100% (Full)</td>
+                                        <td class="px-4 py-2.5 text-amber-400">Saturating</td>
+                                        <td class="px-4 py-2.5 text-brand-rose font-bold">Active drops</td>
+                                        <td class="px-4 py-2.5 text-slate-300">High delay</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">E4-Backend Failure</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Backend DOWN</td>
+                                        <td class="px-4 py-2.5 text-emerald-400">Recorded via Sim</td>
+                                        <td class="px-4 py-2.5 text-brand-rose font-bold">100% (Full)</td>
+                                        <td class="px-4 py-2.5 text-brand-rose">0 (Blocked)</td>
+                                        <td class="px-4 py-2.5 text-brand-rose font-bold">All buffer overflow</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Exponential retries</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 9. TESTING AND EVALUATION -->
+                <section id="testing" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Testing & Evaluation</h2>
+                            <p class="text-xs text-slate-400">Test cases TC-01..TC-08 and mathematical evaluation formulas</p>
+                        </div>
+                    </div>
+
+                    <!-- Test Cases Table -->
+                    <div class="space-y-3">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-vial text-brand-indigo"></i> 8.1 Test Cases Verification Table
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-16">Test ID</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Test Condition</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Expected Behavior to Check</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-01</td>
+                                        <td class="px-4 py-2.5 text-white">Default configuration, no failure</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Sampled request produces trace with related service spans; counters coherent.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-02</td>
+                                        <td class="px-4 py-2.5 text-white">Change sampling probability</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Retained volume changes in the direction implied by setting.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-03</td>
+                                        <td class="px-4 py-2.5 text-white">Adjust batching size/window</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Batch/export behavior changes; observations show queue or delay effect.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-04</td>
+                                        <td class="px-4 py-2.5 text-white">Increase load beyond output capacity</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Queue pressure becomes visible and configured overflow policy is applied.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-05</td>
+                                        <td class="px-4 py-2.5 text-white">Backend unavailable, then restored</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Retry/queue state changes during failure; recovery outcome observable.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-06</td>
+                                        <td class="px-4 py-2.5 text-white">Collector replica unavailable</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Load distribution and remaining capacity reflect replica failure.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-07</td>
+                                        <td class="px-4 py-2.5 text-white">Inspect collector self-monitoring</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Metric path is visually separate and counters align with events.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">TC-08</td>
+                                        <td class="px-4 py-2.5 text-white">Reset after a completed run</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Next run starts from known clean state and does not reuse prior counters.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Formulas Grid -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-calculator text-brand-emerald"></i> 8.2 Evaluation Metrics &amp; Formulas
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono">
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                                <span class="text-brand-indigo font-bold block text-[11px]">Retention Ratio (%)</span>
+                                <div class="text-white text-[10px] bg-slate-950 p-1.5 rounded border border-slate-800">
+                                    (Retained Spans / Generated Spans) &times; 100
+                                </div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                                <span class="text-brand-emerald font-bold block text-[11px]">Export Success Ratio (%)</span>
+                                <div class="text-white text-[10px] bg-slate-950 p-1.5 rounded border border-slate-800">
+                                    (Exported Spans / Accepted Spans) &times; 100
+                                </div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                                <span class="text-brand-rose font-bold block text-[11px]">Drop Ratio (%)</span>
+                                <div class="text-white text-[10px] bg-slate-950 p-1.5 rounded border border-slate-800">
+                                    (Dropped Spans / Accepted Spans) &times; 100
+                                </div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                                <span class="text-brand-amber font-bold block text-[11px]">Peak Queue Util (%)</span>
+                                <div class="text-white text-[10px] bg-slate-950 p-1.5 rounded border border-slate-800">
+                                    (Peak Queued Items / Queue Cap) &times; 100
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 10. FEASIBILITY, RISKS AND LIMITATIONS -->
+                <section id="feasibility" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            10
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">10. Feasibility, Risks & Limitations</h2>
+                            <p class="text-xs text-slate-400">Feasibility matrix, risk mitigation strategies, and project boundaries</p>
+                        </div>
+                    </div>
+
+                    <!-- Feasibility Matrix -->
+                    <div class="space-y-3">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-chart-pie text-brand-rose"></i> 9.1 Feasibility Summary
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Dimension</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Assessment</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Basis</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Technical</td>
+                                        <td class="px-4 py-2.5 text-brand-emerald font-mono font-bold">Feasible</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Uses standard tracing &amp; collector-pipeline concepts (OTLP, bounded queues, retries).</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Operational</td>
+                                        <td class="px-4 py-2.5 text-brand-emerald font-mono font-bold">High for current scope</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Local browser simulation avoids permanent infrastructure and cloud maintenance.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Economic</td>
+                                        <td class="px-4 py-2.5 text-brand-emerald font-mono font-bold">High for current scope</td>
+                                        <td class="px-4 py-2.5 text-slate-400">No dedicated cloud resources required for the simulation environment.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Schedule</td>
+                                        <td class="px-4 py-2.5 text-brand-emerald font-mono font-bold">Feasible with focused scope</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Structured timeline leaves time for baseline, controlled experiments, analysis.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Risks Table -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-shield-cat text-brand-amber"></i> 9.2 Risks &amp; Controls Matrix
+                        </h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/3">Risk</th>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-2/3">Mitigation / Reporting Control</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Simulation model oversimplifies collector behavior</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Document assumptions and avoid generalizing simulated outputs to production.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Sampling hides a low-frequency failure trace</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Compare sampling settings; note absence from backend is not proof an event didn't occur.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Queue capacity or retry policy is unclear</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Record exact settings, peak utilization, and observed overflow/recovery rules.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Metrics are misunderstood across windows</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Record definitions, units, intervals, and stage boundaries before calculating ratios.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 11. CONCLUSION AND FUTURE WORK -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            11
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">11. Conclusion & Future Work</h2>
+                            <p class="text-xs text-slate-400">Final engineering summary and roadmap</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            <strong class="text-white">TraceLab</strong> provides a structured way to learn the telemetry path that supports distributed tracing. The proposed architecture separates span generation, OTLP transport, load balancing, collector processing, bounded buffering, export, trace exploration, and collector self-monitoring. The project is feasible as a local browser simulation because it can demonstrate design trade-offs without requiring permanent physical server infrastructure.
+                        </p>
+                    </div>
+
+                    <!-- Future Work Roadmap Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2">
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">1. Run Journal Export</span>
+                            <span class="text-slate-400">Downloadable run journal with configurations, seed, state, metrics, and timestamps.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-violet font-bold block">2. Loss Disambiguation</span>
+                            <span class="text-slate-400">Expose separate counters for sampling decisions vs queue drops vs exporter errors.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-emerald font-bold block">3. Real Collector Validation</span>
+                            <span class="text-slate-400">Validate scenarios using real local OpenTelemetry Collector binaries and Jaeger/Zipkin.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 12. REFERENCES & APPENDICES -->
+                <section id="appendices" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            12
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">12. References & Appendices</h2>
+                            <p class="text-xs text-slate-400">Official OpenTelemetry references, run record template, and checklist</p>
+                        </div>
+                    </div>
+
+                    <!-- References List -->
+                    <div class="space-y-2 text-xs text-slate-400">
+                        <h4 class="font-bold text-white text-sm">References</h4>
+                        <ul class="list-disc list-inside space-y-1 font-mono">
+                            <li>[1] OpenTelemetry, "Collector architecture". https://opentelemetry.io/docs/collector/architecture/</li>
+                            <li>[2] OpenTelemetry, "OTLP Specification". https://opentelemetry.io/docs/specs/otlp/</li>
+                            <li>[3] OpenTelemetry, "Collector components". https://opentelemetry.io/docs/collector/components/</li>
+                            <li>[4] OpenTelemetry, "Collector troubleshooting". https://opentelemetry.io/docs/collector/troubleshooting/</li>
+                            <li>[5] OpenTelemetry, "Collector resiliency". https://opentelemetry.io/docs/collector/resiliency/</li>
+                        </ul>
+                    </div>
+
+                    <!-- Appendix B Checklist -->
+                    <div class="space-y-2 pt-4 border-t border-slate-800 text-xs">
+                        <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-brand-emerald"></i> Appendix B — Completion Checklist
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-300">
+                            <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-square-check text-brand-emerald"></i> Pre-Test attempted and score saved.
+                            </div>
+                            <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-square-check text-brand-emerald"></i> All Procedure steps completed or documented.
+                            </div>
+                            <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-square-check text-brand-emerald"></i> Baseline simulation run &amp; evidence saved.
+                            </div>
+                            <div class="p-2 rounded-lg bg-slate-900 border border-slate-800 flex items-center gap-2">
+                                <i class="fa-solid fa-square-check text-brand-emerald"></i> Comparative runs completed under load/failures.
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 13. LIVE TRACELAB TELEMETRY COLLECTOR SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Live TraceLab Telemetry Collector Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive Pipeline</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Generate HTTP request traces across 5 microservices, adjust sampling/batching, and simulate outages</p>
+                            </div>
+                        </div>
+
+                        <!-- Reset / Presets -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simGenerateTrace" class="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet hover:opacity-90 text-white font-bold transition shadow-glow-indigo flex items-center gap-1.5">
+                                <i class="fa-solid fa-play"></i> Emit Single Request
+                            </button>
+                            <button id="simAutoToggle" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1">
+                                <i class="fa-solid fa-arrows-rotate text-brand-cyan"></i> Auto Stream
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Controls Grid -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-4 text-xs">
+                            
+                            <!-- Control 1: Sampling Probability -->
+                            <div class="sm:col-span-3 space-y-1">
+                                <div class="flex justify-between font-semibold">
+                                    <label class="text-slate-400">Head Sampling Rate</label>
+                                    <span id="lblSampling" class="text-brand-indigo font-mono font-bold">100%</span>
+                                </div>
+                                <input type="range" id="rngSampling" min="0" max="100" value="100" class="w-full accent-brand-indigo">
+                            </div>
+
+                            <!-- Control 2: Batch Size -->
+                            <div class="sm:col-span-3 space-y-1">
+                                <div class="flex justify-between font-semibold">
+                                    <label class="text-slate-400">Batch Size Threshold</label>
+                                    <span id="lblBatch" class="text-brand-violet font-mono font-bold">5 spans</span>
+                                </div>
+                                <input type="range" id="rngBatch" min="1" max="20" value="5" class="w-full accent-brand-violet">
+                            </div>
+
+                            <!-- Control 3: Bounded Queue Capacity -->
+                            <div class="sm:col-span-3 space-y-1">
+                                <div class="flex justify-between font-semibold">
+                                    <label class="text-slate-400">Queue Capacity</label>
+                                    <span id="lblQueueCap" class="text-brand-amber font-mono font-bold">15 spans</span>
+                                </div>
+                                <input type="range" id="rngQueueCap" min="5" max="50" value="15" class="w-full accent-brand-amber">
+                            </div>
+
+                            <!-- Control 4: Failure Injection Buttons -->
+                            <div class="sm:col-span-3 flex flex-col justify-end gap-1.5">
+                                <button id="btnToggleBackend" class="w-full py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 hover:border-brand-rose font-bold transition flex items-center justify-center gap-1 text-[11px]">
+                                    <span class="w-2 h-2 rounded-full bg-brand-emerald" id="dotBackend"></span> Backend: Healthy
+                                </button>
+                                <button id="btnToggleCollector2" class="w-full py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 hover:border-brand-amber font-bold transition flex items-center justify-center gap-1 text-[11px]">
+                                    <span class="w-2 h-2 rounded-full bg-brand-emerald" id="dotColl2"></span> Collector-2: Active
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Pipeline Monitor Gauges Cards -->
+                    <div class="grid grid-cols-2 sm:grid-cols-6 gap-3 text-xs font-mono">
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Generated</span>
+                            <div id="metricGenerated" class="text-lg font-bold text-white">0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Accepted</span>
+                            <div id="metricAccepted" class="text-lg font-bold text-brand-indigo">0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Exported</span>
+                            <div id="metricExported" class="text-lg font-bold text-brand-emerald">0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Queue Drops</span>
+                            <div id="metricDropped" class="text-lg font-bold text-brand-rose">0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Queue Depth</span>
+                            <div id="metricQueueDepth" class="text-lg font-bold text-brand-amber">0 / 15</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">LB Balance</span>
+                            <div id="metricLbBalance" class="text-[11px] font-bold text-brand-violet pt-1">50% / 50%</div>
+                        </div>
+                    </div>
+
+                    <!-- Microservices Trace Tree & Explorer Output -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                        
+                        <!-- Panel 1: Latest Request Service Span Tree -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-white font-bold flex items-center gap-2">
+                                    <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Latest Generated Span Tree
+                                </span>
+                                <span id="lblTraceId" class="text-[10px] text-brand-indigo">TraceID: None</span>
+                            </div>
+                            <div id="simSpanTree" class="space-y-2 min-h-[160px] max-h-[220px] overflow-y-auto">
+                                <div class="text-slate-500 text-center pt-12 italic">Click 'Emit Single Request' to generate trace spans...</div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Live Execution Trace Console -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-slate-400 font-bold flex items-center gap-2">
+                                    <i class="fa-solid fa-terminal text-brand-emerald"></i> Telemetry Pipeline Execution Console
+                                </span>
+                                <span class="text-[10px] text-slate-500">Live OTLP Events</span>
+                            </div>
+                            <div id="simConsole" class="min-h-[160px] max-h-[220px] overflow-y-auto space-y-1 text-slate-300">
+                                <div class="text-slate-500 italic">Simulator ready. Adjust sliders or failure buttons to observe metrics...</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">T</div>
+                <span class="text-slate-300 font-semibold">Distributed Tracing &amp; Telemetry Collector</span>
+            </div>
+            <div class="text-slate-400">
+                Authors: Anuj Ghagare (13), Kunal Singh (60) | Guide: Mrs. Priya R.L.
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: SIMULATOR & INTERACTIVE UI -->
+    <script>
+        // --- 1. PROGRESS BAR & SCROLLSPY ---
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) {
+                    current = sec.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // --- 2. MOBILE TOC DRAWER ---
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // --- 3. ARCHITECTURE DIAGRAM TABS ---
+        document.querySelectorAll('.arch-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.arch-tab').forEach(b => {
+                    b.classList.remove('active', 'bg-brand-indigo', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('active', 'bg-brand-indigo', 'text-white');
+                btn.classList.remove('text-slate-400');
+
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.arch-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById('arch-' + tab).classList.remove('hidden');
+            });
+        });
+
+        // --- 4. LIVE IN-PAGE SEARCH ---
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            if (val.length > 0) clearSearch.classList.remove('hidden');
+            else clearSearch.classList.add('hidden');
+        });
+
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- 5. LIVE TELEMETRY COLLECTOR SIMULATOR ENGINE ---
+        class TelemetrySimulator {
+            constructor() {
+                this.samplingRate = 100;
+                this.batchSize = 5;
+                this.queueCap = 15;
+                this.backendHealthy = true;
+                this.collector2Active = true;
+                this.autoInterval = null;
+
+                // State Counters
+                this.counts = {
+                    generated: 0,
+                    accepted: 0,
+                    exported: 0,
+                    dropped: 0,
+                    coll1Spans: 0,
+                    coll2Spans: 0
+                };
+
+                this.queue = [];
+                this.consoleLogs = [];
+                this.latestTraceSpans = [];
+
+                this.bindControls();
+            }
+
+            bindControls() {
+                document.getElementById('rngSampling').addEventListener('input', (e) => {
+                    this.samplingRate = parseInt(e.target.value);
+                    document.getElementById('lblSampling').innerText = `${this.samplingRate}%`;
+                });
+
+                document.getElementById('rngBatch').addEventListener('input', (e) => {
+                    this.batchSize = parseInt(e.target.value);
+                    document.getElementById('lblBatch').innerText = `${this.batchSize} spans`;
+                });
+
+                document.getElementById('rngQueueCap').addEventListener('input', (e) => {
+                    this.queueCap = parseInt(e.target.value);
+                    document.getElementById('lblQueueCap').innerText = `${this.queueCap} spans`;
+                    this.renderUI();
+                });
+
+                document.getElementById('btnToggleBackend').addEventListener('click', () => {
+                    this.backendHealthy = !this.backendHealthy;
+                    const dot = document.getElementById('dotBackend');
+                    const btn = document.getElementById('btnToggleBackend');
+                    if (this.backendHealthy) {
+                        dot.className = 'w-2 h-2 rounded-full bg-brand-emerald';
+                        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-brand-emerald"></span> Backend: Healthy`;
+                        this.logConsole('BACKEND RESTORED &rarr; Resuming batch exports from queues.', 'success');
+                        this.processQueue();
+                    } else {
+                        dot.className = 'w-2 h-2 rounded-full bg-brand-rose';
+                        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-brand-rose"></span> Backend: DOWN`;
+                        this.logConsole('BACKEND OUTAGE &rarr; Backend unreachable. Exporters retrying, buffering to queue.', 'error');
+                    }
+                });
+
+                document.getElementById('btnToggleCollector2').addEventListener('click', () => {
+                    this.collector2Active = !this.collector2Active;
+                    const btn = document.getElementById('btnToggleCollector2');
+                    if (this.collector2Active) {
+                        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-brand-emerald"></span> Collector-2: Active`;
+                        this.logConsole('REPLICA RESTORED &rarr; Collector-2 online. Least-buffered load balancing resumed.', 'info');
+                    } else {
+                        btn.innerHTML = `<span class="w-2 h-2 rounded-full bg-brand-rose"></span> Collector-2: CRASHED`;
+                        this.logConsole('REPLICA CRASH &rarr; Collector-2 offline. 100% telemetry routed to Collector-1.', 'warn');
+                    }
+                    this.renderUI();
+                });
+            }
+
+            logConsole(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let colorClass = 'text-slate-300';
+                if (type === 'success') colorClass = 'text-brand-emerald font-semibold';
+                if (type === 'warn') colorClass = 'text-brand-amber';
+                if (type === 'error') colorClass = 'text-brand-rose';
+                if (type === 'step') colorClass = 'text-brand-indigo font-mono';
+
+                this.consoleLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.consoleLogs.length > 25) this.consoleLogs.pop();
+                document.getElementById('simConsole').innerHTML = this.consoleLogs.join('');
+            }
+
+            emitTraceRequest() {
+                const traceHex = Math.random().toString(16).substring(2, 10);
+                const traceId = `tr-${traceHex}`;
+
+                // 5 Microservice Spans
+                const spans = [
+                    { service: 'api-gateway', spanId: `sp-gw-${traceHex}`, parentId: 'null', duration: Math.floor(Math.random() * 20 + 35) },
+                    { service: 'order-service', spanId: `sp-ord-${traceHex}`, parentId: `sp-gw-${traceHex}`, duration: Math.floor(Math.random() * 15 + 20) },
+                    { service: 'payment-service', spanId: `sp-pay-${traceHex}`, parentId: `sp-ord-${traceHex}`, duration: Math.floor(Math.random() * 10 + 10) },
+                    { service: 'inventory-service', spanId: `sp-inv-${traceHex}`, parentId: `sp-ord-${traceHex}`, duration: Math.floor(Math.random() * 8 + 8) },
+                    { service: 'database', spanId: `sp-db-${traceHex}`, parentId: `sp-inv-${traceHex}`, duration: Math.floor(Math.random() * 5 + 4) }
+                ];
+
+                this.counts.generated += spans.length;
+                this.latestTraceSpans = spans;
+                document.getElementById('lblTraceId').innerText = `TraceID: ${traceId}`;
+
+                // Apply Head Sampling
+                const sampledSpans = [];
+                spans.forEach(span => {
+                    const pass = Math.random() * 100 <= this.samplingRate;
+                    if (pass) sampledSpans.push({ ...span, traceId });
+                });
+
+                this.logConsole(`REQUEST &rarr; Generated Trace ${traceId} (${spans.length} spans). Head sampling retained ${sampledSpans.length} spans.`, 'step');
+
+                // Route through Least-Buffered LB
+                sampledSpans.forEach(span => {
+                    this.counts.accepted++;
+                    
+                    // Route replica
+                    if (!this.collector2Active) {
+                        this.counts.coll1Spans++;
+                    } else {
+                        if (this.counts.coll1Spans <= this.counts.coll2Spans) this.counts.coll1Spans++;
+                        else this.counts.coll2Spans++;
+                    }
+
+                    // Enqueue
+                    if (this.queue.length < this.queueCap) {
+                        this.queue.push(span);
+                    } else {
+                        this.counts.dropped++;
+                        this.logConsole(`QUEUE OVERFLOW &rarr; Queue full (${this.queueCap}). Dropped span ${span.spanId} (${span.service}).`, 'error');
+                    }
+                });
+
+                this.processQueue();
+                this.renderUI();
+            }
+
+            processQueue() {
+                if (!this.backendHealthy) {
+                    return; // Retries buffering in queue
+                }
+
+                // Batch Export
+                if (this.queue.length >= this.batchSize) {
+                    const batch = this.queue.splice(0, this.batchSize);
+                    this.counts.exported += batch.length;
+                    this.logConsole(`EXPORT BATCH &rarr; Exported ${batch.length} spans to Trace Backend successfully.`, 'success');
+                }
+            }
+
+            reset() {
+                this.counts = { generated: 0, accepted: 0, exported: 0, dropped: 0, coll1Spans: 0, coll2Spans: 0 };
+                this.queue = [];
+                this.consoleLogs = [];
+                this.latestTraceSpans = [];
+                if (this.autoInterval) clearInterval(this.autoInterval);
+                this.autoInterval = null;
+                document.getElementById('simAutoToggle').classList.remove('bg-brand-indigo');
+                document.getElementById('simConsole').innerHTML = '<div class="text-slate-500 italic">Simulator reset. Emitting clear state...</div>';
+                document.getElementById('simSpanTree').innerHTML = '<div class="text-slate-500 text-center pt-12 italic">Click \'Emit Single Request\' to generate trace spans...</div>';
+                document.getElementById('lblTraceId').innerText = 'TraceID: None';
+                this.renderUI();
+            }
+
+            renderUI() {
+                document.getElementById('metricGenerated').innerText = this.counts.generated;
+                document.getElementById('metricAccepted').innerText = this.counts.accepted;
+                document.getElementById('metricExported').innerText = this.counts.exported;
+                document.getElementById('metricDropped').innerText = this.counts.dropped;
+                document.getElementById('metricQueueDepth').innerText = `${this.queue.length} / ${this.queueCap}`;
+
+                // LB Balance
+                const totalColl = this.counts.coll1Spans + this.counts.coll2Spans;
+                if (totalColl === 0) {
+                    document.getElementById('metricLbBalance').innerText = '50% / 50%';
+                } else {
+                    const c1Ratio = Math.round((this.counts.coll1Spans / totalColl) * 100);
+                    const c2Ratio = 100 - c1Ratio;
+                    document.getElementById('metricLbBalance').innerText = `${c1Ratio}% / ${c2Ratio}%`;
+                }
+
+                // Span Tree render
+                if (this.latestTraceSpans.length > 0) {
+                    document.getElementById('simSpanTree').innerHTML = this.latestTraceSpans.map(s => `
+                        <div class="p-2 rounded bg-slate-900 border border-slate-800 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-white">${s.service}</span>
+                                <span class="text-brand-indigo font-mono text-[10px]">${s.duration} ms</span>
+                            </div>
+                            <div class="text-[9px] text-slate-400 flex justify-between font-mono">
+                                <span>SpanID: ${s.spanId}</span>
+                                <span>Parent: ${s.parentId}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+        }
+
+        const sim = new TelemetrySimulator();
+
+        document.getElementById('simGenerateTrace').addEventListener('click', () => sim.emitTraceRequest());
+        document.getElementById('simReset').addEventListener('click', () => sim.reset());
+
+        document.getElementById('simAutoToggle').addEventListener('click', () => {
+            const btn = document.getElementById('simAutoToggle');
+            if (sim.autoInterval) {
+                clearInterval(sim.autoInterval);
+                sim.autoInterval = null;
+                btn.classList.remove('bg-brand-indigo');
+                sim.logConsole('AUTO STREAM &rarr; Paused continuous request generation.', 'info');
+            } else {
+                sim.autoInterval = setInterval(() => sim.emitTraceRequest(), 800);
+                btn.classList.add('bg-brand-indigo');
+                sim.logConsole('AUTO STREAM &rarr; Started streaming requests every 800ms.', 'success');
+            }
+        });
+    </script>
+</body>
+</html>

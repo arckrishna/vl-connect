@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Actor Model Runtime on Kubernetes</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.35)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.35)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.35)',
+              'glow-amber': '0 0 25px -5px rgba(245, 158, 11, 0.35)',
+              'glow-rose': '0 0 25px -5px rgba(244, 63, 94, 0.35)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.35);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.25);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    <i class="fa-solid fa-cubes text-sm"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Actor Model Runtime on Kubernetes
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">ActorLab v2.0</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Virtual Actor Framework with Dynamic State Rebalancing &amp; Singletons</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Actor Runtime Simulator</span>
+                </a>
+
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar TOC (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Hero Header</a>
+                            <a href="#abstract" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Abstract &amp; Abbreviations</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Introduction &amp; Objectives</a>
+                            <a href="#related-work" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Related Work Comparison</a>
+                            <a href="#requirements" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Requirements &amp; Failure Model</a>
+                            <a href="#tech-stack" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. Technology Stack</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. System Architecture (Figs 1-2)</a>
+                            <a href="#detailed-design" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Detailed Design (Figs 3-4, Algo)</a>
+                            <a href="#pathways" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Data &amp; Control Pathways (Figs 5-9)</a>
+                            <a href="#correctness" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Consistency &amp; Guarantees</a>
+                            <a href="#failures" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">10. Failures &amp; Singletons (Figs 10-11)</a>
+                            <a href="#security-ops" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">11. Security &amp; Runbooks</a>
+                            <a href="#scalability" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">12. Scalability &amp; Cost Model</a>
+                            <a href="#validation" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">13. Validation &amp; Test Matrix</a>
+                            <a href="#feasibility" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">14. Feasibility &amp; Risks</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">15. Conclusion &amp; Scope</a>
+                            <a href="#appendices" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">16. Appendices A - D</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 17. ActorLab Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Project Metadata</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Course Guide</span>
+                                <span class="text-slate-200 font-semibold">Mrs. Priya R.L.</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Group 09 (D12A)</span>
+                                <span class="text-slate-200 font-medium block">Zaid Mulla (Roll No. 41)</span>
+                                <span class="text-slate-200 font-medium block">Mohd Adil Shaikh (Roll No. 57)</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Dept: CMPN, VESIT</span>
+                                <span class="text-brand-indigo font-mono">Academic 2026</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-1.5 text-slate-300">0. Hero Header</a>
+                        <a href="#abstract" class="mobile-toc-link block py-1.5 text-slate-300">1. Abstract &amp; Abbreviations</a>
+                        <a href="#introduction" class="mobile-toc-link block py-1.5 text-slate-300">2. Introduction &amp; Objectives</a>
+                        <a href="#related-work" class="mobile-toc-link block py-1.5 text-slate-300">3. Related Work</a>
+                        <a href="#requirements" class="mobile-toc-link block py-1.5 text-slate-300">4. Requirements</a>
+                        <a href="#architecture" class="mobile-toc-link block py-1.5 text-slate-300">5. System Architecture</a>
+                        <a href="#detailed-design" class="mobile-toc-link block py-1.5 text-slate-300">6. Detailed Design</a>
+                        <a href="#pathways" class="mobile-toc-link block py-1.5 text-slate-300">7. Pathways</a>
+                        <a href="#correctness" class="mobile-toc-link block py-1.5 text-slate-300">8. Consistency</a>
+                        <a href="#failures" class="mobile-toc-link block py-1.5 text-slate-300">9. Failures &amp; Singletons</a>
+                        <a href="#validation" class="mobile-toc-link block py-1.5 text-slate-300">10. Validation Plan</a>
+                        <a href="#appendices" class="mobile-toc-link block py-1.5 text-slate-300">11. Appendices A - D</a>
+                        <a href="#simulator" class="mobile-toc-link block py-1.5 text-brand-emerald font-bold">12. ActorLab Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-microchip"></i> System Software Design Technical Report
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Kubernetes &amp; PostgreSQL
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Virtual Actor Framework
+                            </span>
+                        </div>
+
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Actor Model Runtime on <span class="gradient-text">Kubernetes</span>
+                        </h1>
+
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            Virtual Actor Framework with Dynamic State Rebalancing and Singletons | Virtual Lab: <strong class="text-white font-semibold">ActorLab</strong>. Advanced Cloud System Software Design Continuous Assessment Project.
+                        </p>
+
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Course Guide</span>
+                                <span class="text-white font-bold text-sm block">Mrs. Priya R.L.</span>
+                                <span class="text-slate-400 block text-[11px]">Department of Computer Engineering</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Authors (Group 09)</span>
+                                <span class="text-white font-semibold block">Zaid Mulla (Roll No. 41, D12A)</span>
+                                <span class="text-white font-semibold block">Mohd Adil Shaikh (Roll No. 57, D12A)</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Institution &amp; Year</span>
+                                <span class="text-slate-200 block font-semibold">VESIT, Mumbai</span>
+                                <span class="text-brand-indigo font-mono">Academic Year 2026</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch ActorLab Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore Architecture (Figs 1-11)
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. ABSTRACT & ABBREVIATIONS -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Abstract &amp; Abbreviations</h2>
+                            <p class="text-xs text-slate-400">Executive summary, design targets, and core terms</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            <strong class="text-white">ActorLab</strong> turns a managed Kubernetes cluster and a PostgreSQL database into a virtual actor runtime. Kubernetes supplies disposable pods, replica scaling and restarts; PostgreSQL supplies durable, strongly consistent storage. The custom layer built on top of them gives every logical actor a stable identity, a private mailbox, durable state and exactly one valid owner at any moment, no matter which pod hosts it. A control plane routes each message to the actor's owner, runtime pods process each actor's mailbox sequentially, and ownership is held as a lease with a monotonically increasing epoch (fencing token) in the database. When capacity changes, a rebalancer moves only the actors that must move, using a drain, flush and fenced handover. Singleton actors use database leases with fencing tokens.
+                        </p>
+                        <p>
+                            The design targets four guarantees: linearizable per-actor state through single-owner, version-checked writes; fault tolerance for pod and control-plane crashes with state preserved; at-least-once delivery with idempotent deduplication, giving effectively-once state effects; and safe rebalancing and singleton ownership through fencing. This is a Phase 1 System Software Design report. It specifies requirements, architecture, data model, state machines, pathways, failure handling, security and a validation plan.
+                        </p>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs">
+                            <strong class="text-brand-indigo block mb-1">Keywords:</strong>
+                            <span class="text-slate-400">virtual actors, actor model, Kubernetes, horizontal pod autoscaler, fencing token, lease, epoch, idempotency, rendezvous hashing, rebalancing, singleton, fault tolerance.</span>
+                        </div>
+                    </div>
+
+                    <!-- Abbreviations Table -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Project Abbreviations</h4>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-32">Term</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Meaning</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                    <tr>
+                                        <td class="px-4 py-2 text-brand-indigo font-bold">HPA</td>
+                                        <td class="px-4 py-2 font-sans text-slate-300">Horizontal Pod Autoscaler (Kubernetes)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 text-brand-violet font-bold">KEDA</td>
+                                        <td class="px-4 py-2 font-sans text-slate-300">Kubernetes Event-Driven Autoscaler</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 text-brand-cyan font-bold">RBAC / SSE / TTL</td>
+                                        <td class="px-4 py-2 font-sans text-slate-300">Role-based access control / Server-Sent Events / Time to Live (lease duration)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 text-brand-emerald font-bold">EKS / GKE</td>
+                                        <td class="px-4 py-2 font-sans text-slate-300">Amazon Elastic Kubernetes Service / Google Kubernetes Engine</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 text-brand-amber font-bold">PRD</td>
+                                        <td class="px-4 py-2 font-sans text-slate-300">Product Requirements Document (ActorLab v2.0)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. INTRODUCTION & OBJECTIVES -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Introduction &amp; Objectives</h2>
+                            <p class="text-xs text-slate-400">Background, problem statement, and 8 core objectives</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            Kubernetes schedules containers, restarts failed pods and adjusts replica counts, but it has no concept of a logical actor. A pod is disposable: when it dies, everything in its memory is gone. A Kubernetes Service load-balances each request to any ready pod, so two requests for the same logical entity can reach different pods and race on the same state. Kubernetes cannot guarantee that one entity has one owner, cannot move an entity's state when replicas are added or removed, and cannot tell a replacement pod from a recovered entity. Typical uses that need these properties are per-user or per-device state, counters and sessions, stateful workers, and coordinators that must run exactly once.
+                        </p>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-indigo/10 via-brand-violet/10 to-transparent border border-brand-indigo/30 space-y-2">
+                        <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-question"></i> 1.2 Problem Statement
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            "How can disposable, interchangeable pods and a database be turned into a runtime in which every logical actor has one valid owner, durable state and ordered message processing, that rebalances safely when capacity changes and recovers from pod and control-plane failures without losing or double-applying work?"
+                        </p>
+                    </div>
+
+                    <div class="space-y-3 pt-2">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">1.3 Project Objectives (01 to 08)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">01</span>
+                                <span>Give each logical actor a stable identity independent of the hosting pod.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">02</span>
+                                <span>Process each actor's messages sequentially in mailbox order, and different actors concurrently.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">03</span>
+                                <span>Persist actor state durably and recover it after pod replacement.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">04</span>
+                                <span>Guarantee a single valid owner per actor using epoch-based fencing.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">05</span>
+                                <span>Rebalance actors safely when replica counts change (drain, flush, fenced handover).</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">06</span>
+                                <span>Provide singleton actors with one valid owner using leases and fencing tokens.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">07</span>
+                                <span>Achieve effectively-once state effects on top of at-least-once delivery using message-ID deduplication.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">08</span>
+                                <span>Scale runtime on Kubernetes (manual/HPA), report observed state honestly, and show real metrics.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. RELATED WORK -->
+                <section id="related-work" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Related Work &amp; System Positioning</h2>
+                            <p class="text-xs text-slate-400">Comparison with Orleans, Akka, Dapr, Ray, and gap addressed</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">System</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Model</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Relevance to this Design</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Microsoft Orleans</td>
+                                    <td class="px-4 py-3 text-slate-300">Virtual actors (grains) activated on demand, placed by runtime.</td>
+                                    <td class="px-4 py-3 text-slate-400">Origin of virtual actor idea; our lifecycle follows it with database epochs.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Akka Cluster Sharding</td>
+                                    <td class="px-4 py-3 text-slate-300">Entities grouped into shards rebalanced across cluster nodes.</td>
+                                    <td class="px-4 py-3 text-slate-400">Closest in rebalancing; relies on custom membership rather than Kubernetes/RDBMS.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Dapr Actors</td>
+                                    <td class="px-4 py-3 text-slate-300">Virtual actors with placement service and pluggable state store.</td>
+                                    <td class="px-4 py-3 text-slate-400">Closest deployment style (K8s + state store); ActorLab makes fencing observable.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Kubernetes StatefulSet</td>
+                                    <td class="px-4 py-3 text-slate-300">Pods with stable names and persistent disk storage.</td>
+                                    <td class="px-4 py-3 text-slate-400">Provides stable pod identity, but not per-entity ordering, affinity or migration.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 4. REQUIREMENTS AND FAILURE MODEL -->
+                <section id="requirements" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. Requirements &amp; Failure Model</h2>
+                            <p class="text-xs text-slate-400">Functional criteria FR1..FR16, NFRs, and crash-recovery failure model</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800 w-16">ID</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Requirement Summary</th>
+                                    <th class="px-4 py-3 border-b border-slate-800 w-24">Objective</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-indigo font-bold">FR1 - FR2</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Lab management &amp; React Flow visual designer with node validation.</td>
+                                    <td class="px-4 py-2.5 text-slate-400">08</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-indigo font-bold">FR3 - FR6</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Deploy runtime in per-lab namespace, 409 NOT_OWNER rejection, sequential mailboxes, versioned state commits in 1 TX.</td>
+                                    <td class="px-4 py-2.5 text-slate-400">01,02,03,04,07</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-indigo font-bold">FR7 - FR9</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Message-ID deduplication, epoch/lease heartbeats, lease-expiry orphan detection &amp; state recovery.</td>
+                                    <td class="px-4 py-2.5 text-slate-400">03,04,07</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-indigo font-bold">FR10 - FR13</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Safe actor migration, singletons with fencing tokens, manual/HPA scaling, real workload generator.</td>
+                                    <td class="px-4 py-2.5 text-slate-400">05,06,08</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-indigo font-bold">FR14 - FR16</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">SSE live dashboard, fault injection (pod deletion), full Kubernetes resource teardown on delete.</td>
+                                    <td class="px-4 py-2.5 text-slate-400">03,08</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 5. TECHNOLOGY STACK -->
+                <section id="tech-stack" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. Technology Stack</h2>
+                            <p class="text-xs text-slate-400">Role specifications and PostgreSQL selection rationale</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Frontend UI</span>
+                            <span class="text-slate-300">React, React Flow, Tailwind CSS, SSE stream</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-violet font-bold block">Control Plane</span>
+                            <span class="text-slate-300">Node.js &amp; Express, Kubernetes client library</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-emerald font-bold block">Actor Runtime</span>
+                            <span class="text-slate-300">Node.js container (/health, /ready, /metrics)</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-cyan font-bold block">State Store</span>
+                            <span class="text-slate-300">PostgreSQL (row locks, unique constraints, ACID)</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-amber font-bold block">Orchestration</span>
+                            <span class="text-slate-300">Kubernetes Deployment, Service, HPA, Minikube</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-rose font-bold block">Packaging</span>
+                            <span class="text-slate-300">Docker images and Docker Compose</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. SYSTEM ARCHITECTURE (FIGURES 1 & 2) -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                                06
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white">6. System Architecture</h2>
+                                <p class="text-xs text-slate-400">Figures 1 &amp; 2 Preserved — Local Virtual-Lab Topology &amp; Layered System Architecture</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                            <button class="arch-tab px-3 py-1.5 rounded-lg active font-semibold text-white bg-brand-indigo shadow transition" data-tab="fig1">
+                                Figure 1 (Topology)
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="fig2">
+                                Figure 2 (Layered Architecture)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 relative overflow-x-auto min-h-[440px]">
+                        
+                        <!-- FIGURE 1 -->
+                        <div id="arch-fig1" class="arch-pane space-y-4">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider">Local Virtual-Lab Specification</span>
+                                <h3 class="text-base font-bold text-white">Figure 1. Local Virtual-Lab Topology (Docker Compose Stack &amp; Minikube Cluster)</h3>
+                            </div>
+                            <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                                <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
+                                    <div class="font-bold text-white border-b border-slate-700 pb-1">Developer Machine (Docker Compose)</div>
+                                    <div class="p-2 bg-slate-900 rounded text-brand-cyan">Browser (user) &rarr; HTTP</div>
+                                    <div class="p-2 bg-slate-900 rounded text-slate-200">Frontend Container (React + React Flow + Tailwind)</div>
+                                    <div class="p-2 bg-slate-900 rounded text-brand-violet">Backend Container (Control Plane Node.js/Express)</div>
+                                    <div class="p-2 bg-slate-900 rounded text-brand-emerald">PostgreSQL Container (5432 state, leases, actors)</div>
+                                </div>
+                                <div class="p-3.5 rounded-xl bg-slate-800/80 border border-slate-700 space-y-2">
+                                    <div class="font-bold text-white border-b border-slate-700 pb-1">Minikube Cluster (Local Kubernetes)</div>
+                                    <div class="p-2 bg-slate-900 rounded text-brand-amber">Kubernetes API Server (RBAC ServiceAccount)</div>
+                                    <div class="p-2 bg-slate-900 rounded text-slate-300">Namespace: lab-&lt;labId&gt;</div>
+                                    <div class="p-2 bg-slate-900 rounded text-emerald-400">Service: actor-runtime-svc</div>
+                                    <div class="grid grid-cols-3 gap-1 text-center text-[10px]">
+                                        <div class="p-1 bg-slate-950 rounded border border-slate-800">Runtime Pod 1</div>
+                                        <div class="p-1 bg-slate-950 rounded border border-slate-800">Runtime Pod 2</div>
+                                        <div class="p-1 bg-slate-950 rounded border border-slate-800">Runtime Pod 3</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FIGURE 2 -->
+                        <div id="arch-fig2" class="arch-pane hidden space-y-4">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-violet uppercase tracking-wider">Layered Architecture</span>
+                                <h3 class="text-base font-bold text-white">Figure 2. Layered System Architecture — Virtual Actor Layer over Kubernetes &amp; PostgreSQL</h3>
+                            </div>
+                            <div class="space-y-3 text-xs font-mono">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-brand-rose font-bold block">1. Public Network</span>
+                                    <p class="text-slate-400 font-sans">Client Browser (React UI) &rarr; API Gateway / Ingress (TLS, Auth, Rate Limiting)</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-brand-violet font-bold block">2. Control Plane (namespace: actorlab-system)</span>
+                                    <p class="text-slate-400 font-sans">Lab Manager | Workload Generator | Placement Manager | Reconciler/Health Watcher | Scaling Controller | Metrics Aggregator</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-brand-emerald font-bold block">3. Data Plane (namespace: lab-&lt;labId&gt;)</span>
+                                    <p class="text-slate-400 font-sans">Kubernetes Service (actor-runtime-svc) &rarr; Runtime Pods 1..N (Active Mailboxes, Sequential processing)</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-brand-cyan font-bold block">4. Distributed State Store</span>
+                                    <p class="text-slate-400 font-sans">PostgreSQL Primary (actors, actor_states, messages, singleton_ownership, actor_migrations, scaling_events)</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+                <!-- 7. DETAILED DESIGN (FIGURES 3 & 4, ALGORITHMS) -->
+                <section id="detailed-design" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Detailed Design &amp; Core Algorithms</h2>
+                            <p class="text-xs text-slate-400">Data model schema (Fig 3), Actor lifecycle state machine (Fig 4), and Pseudocode A-E</p>
+                        </div>
+                    </div>
+
+                    <!-- FIGURE 3 SCHEMA -->
+                    <div class="space-y-3">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-database text-brand-cyan"></i> Figure 3. Database Data Model &amp; Key Column Constraints
+                        </h4>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <div class="text-brand-indigo font-bold">actors</div>
+                                <div class="text-slate-400 text-[11px]">PK actor_id, lab_id, owner_runtime_id, epoch, lease_expiry, status</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <div class="text-brand-violet font-bold">actor_states</div>
+                                <div class="text-slate-400 text-[11px]">PK/FK actor_id, state (jsonb), version (bigint, version + 1 per commit)</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <div class="text-brand-emerald font-bold">messages</div>
+                                <div class="text-slate-400 text-[11px]">PK message_id (UNIQUE), seq, actor_id, payload, result, status</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <div class="text-brand-amber font-bold">singleton_ownership</div>
+                                <div class="text-slate-400 text-[11px]">PK name, lab_id, owner_runtime_id, fencing_token (bigint), lease_expiry</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <div class="text-brand-rose font-bold">actor_migrations</div>
+                                <div class="text-slate-400 text-[11px]">PK migration_id, actor_id, from_runtime, to_runtime, from_epoch, to_epoch</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <div class="text-slate-200 font-bold">runtimes / labs</div>
+                                <div class="text-slate-400 text-[11px]">runtimes (pod_name, pod_ip, last_heartbeat); labs (config, scaling_mode)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FIGURE 4 LIFECYCLE STATE MACHINE -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-arrows-spin text-brand-violet"></i> Figure 4. Actor Lifecycle, Migration &amp; Orphan-Recovery State Machine
+                        </h4>
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300 space-y-2">
+                            <div class="text-slate-400">// Lifecycle States: DEACTIVATED -> ACTIVATING -> ACTIVE -> DRAINING -> MIGRATING -> ORPHANED</div>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center text-[11px]">
+                                <div class="p-2 rounded bg-slate-900 border border-slate-800 text-slate-400">DEACTIVATED (Idle in DB)</div>
+                                <div class="p-2 rounded bg-slate-900 border border-brand-indigo text-indigo-300">ACTIVATING (Load state)</div>
+                                <div class="p-2 rounded bg-slate-900 border border-brand-emerald text-emerald-300 font-bold">ACTIVE (Mailbox active)</div>
+                                <div class="p-2 rounded bg-slate-900 border border-brand-amber text-amber-300">DRAINING (Finish msg)</div>
+                                <div class="p-2 rounded bg-slate-900 border border-brand-violet text-violet-300">MIGRATING (Handover)</div>
+                                <div class="p-2 rounded bg-slate-900 border border-brand-rose text-rose-300 font-bold">ORPHANED (Lease expired)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- CORE ALGORITHMS A-E -->
+                    <div class="space-y-4 pt-4 border-t border-slate-800">
+                        <h4 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-code text-brand-indigo"></i> Core Algorithms Pseudocode (A to E)
+                        </h4>
+                        
+                        <div class="p-4 rounded-xl bg-slate-950 font-mono text-xs text-slate-300 space-y-2 border border-slate-800">
+                            <div class="text-brand-indigo font-bold">// Algorithm A: Router Submitting Message</div>
+<pre class="text-slate-400">
+function submit(actor_id, message):
+  row = SELECT owner_runtime_id, epoch, status FROM actors WHERE actor_id
+  if row.owner is null or row.status in (DEACTIVATED, ORPHANED):
+    row = placement.activate(actor_id)
+  if row.status == MIGRATING: return buffer(actor_id, message)
+  for attempt in 1..MAX_ROUTE_ATTEMPTS:
+    reply = POST owner_pod/actors/{actor_id}/messages {message, epoch}
+    if reply.ok: return reply
+    if reply is 409 NOT_OWNER: sleep(backoff(attempt)); re-read ownership
+  return 503 RETRYABLE
+</pre>
+                        </div>
+
+                        <div class="p-4 rounded-xl bg-slate-950 font-mono text-xs text-slate-300 space-y-2 border border-slate-800">
+                            <div class="text-brand-emerald font-bold">// Algorithm B: Runtime Fenced Transaction Commit</div>
+<pre class="text-slate-400">
+actor loop (sequential mailbox):
+  m = mailbox.dequeue()
+  BEGIN TRANSACTION
+    SELECT 1 FROM actors WHERE actor_id AND owner_runtime_id = me AND epoch = my_epoch FOR SHARE
+    if no row: ROLLBACK; stop hosting actor (STALE_OWNER); return 409
+    (new_state, result) = behavior.handle(state, m)
+    UPDATE actor_states SET state = new_state, version = version + 1 WHERE actor_id AND version = v
+    if updated == 0: ROLLBACK; reload state; retry
+    UPDATE messages SET status = 'DONE', result = result WHERE message_id
+  COMMIT
+</pre>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. DATA AND CONTROL PATHWAYS (FIGURES 5 - 9) -->
+                <section id="pathways" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Data &amp; Control Pathways</h2>
+                            <p class="text-xs text-slate-400">Figures 5, 6, 7, 8, 9 — Write path, Read path, Control loops, Scaling &amp; Fenced migration</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                            <div class="font-bold text-brand-indigo">Figure 5: Write Path Sequence</div>
+                            <p class="text-slate-400 font-sans">Client &rarr; API Gateway &rarr; Control Plane Router &rarr; PostgreSQL Read Epoch &rarr; Runtime Pod &rarr; Unique Message Insert &rarr; Fenced State Commit v+1 &rarr; Response.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                            <div class="font-bold text-brand-violet">Figure 6: Read Path Sequence</div>
+                            <p class="text-slate-400 font-sans">Client &rarr; Gateway &rarr; Control Plane &rarr; PostgreSQL Primary Read (Committed state &amp; version). Pods and mailboxes are never touched for reads.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                            <div class="font-bold text-brand-emerald">Figure 7: Background Control Loops</div>
+                            <p class="text-slate-400 font-sans">Reconciler Loop | Scaling Loop | Metrics Loop | Lease Heartbeat Loop | Rebalancer Worker | In-flight Message Recovery Worker.</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                            <div class="font-bold text-brand-amber">Figure 8: Manual vs Automatic Scaling</div>
+                            <p class="text-slate-400 font-sans">User set desired replicas vs Workload Generator CPU spikes &rarr; metrics-server &rarr; HPA patch Deployment &rarr; Reconciler pod Ready check.</p>
+                        </div>
+                    </div>
+
+                    <!-- FIGURE 9 SAFE MIGRATION -->
+                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 font-mono text-xs space-y-2">
+                        <div class="text-brand-cyan font-bold">Figure 9: Safe Actor Migration Protocol (Fenced Handover)</div>
+                        <ol class="list-decimal list-inside text-slate-400 space-y-1 font-sans">
+                            <li><strong class="text-white">Mark MIGRATING:</strong> Router buffers incoming new messages for the actor.</li>
+                            <li><strong class="text-white">Drain:</strong> Old owner finishes current message execution and accepts no more.</li>
+                            <li><strong class="text-white">Flush:</strong> Old owner commits final state (version v) to PostgreSQL.</li>
+                            <li><strong class="text-white">Handover Transaction:</strong> Single SQL TX sets new owner, epoch + 1, and records COMPLETED migration. Old owner is immediately fenced.</li>
+                            <li><strong class="text-white">Activate:</strong> New owner loads state version v and becomes ACTIVE. Router flushes buffered messages.</li>
+                        </ol>
+                    </div>
+                </section>
+
+                <!-- 9. CONSISTENCY AND CORRECTNESS -->
+                <section id="correctness" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Consistency &amp; Correctness</h2>
+                            <p class="text-xs text-slate-400">Invariants I1 to I9 and correctness guarantees</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Invariants Preserved (I1 to I9)</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs font-mono">
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                <span class="text-brand-indigo font-bold block">I1. Single Owner</span>
+                                <span class="text-slate-400">Only runtime named in actors row with matching epoch can commit.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                <span class="text-brand-violet font-bold block">I2. Monotonic Epoch</span>
+                                <span class="text-slate-400">Epoch increases on every owner change and never decreases.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                <span class="text-brand-emerald font-bold block">I3. Versioned State</span>
+                                <span class="text-slate-400">State commit increments version by 1 guarded by version + epoch.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                <span class="text-brand-cyan font-bold block">I4. Idempotency</span>
+                                <span class="text-slate-400">Message has at most one effective DONE transition (unique ID).</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                <span class="text-brand-amber font-bold block">I5. Persisted ACK</span>
+                                <span class="text-slate-400">Asynchronous messages persisted as RECEIVED before ACK.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                <span class="text-brand-rose font-bold block">I6. Active Only</span>
+                                <span class="text-slate-400">An actor that is not ACTIVE processes no messages.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 10. FAILURES & SINGLETONS (FIGURES 10 & 11) -->
+                <section id="failures" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            10
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">10. Failure Strategy &amp; Singleton Fencing</h2>
+                            <p class="text-xs text-slate-400">Figures 10 &amp; 11 — Pod restart vs State recovery &amp; Fencing tokens</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                        <!-- FIGURE 10 -->
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                            <div class="text-brand-rose font-bold">Figure 10: Pod Restart vs ActorLab State Recovery</div>
+                            <p class="text-slate-400 font-sans">
+                                Kubernetes responsibility replaces the pod (ReplicaSet -> Readiness probe). ActorLab responsibility detects missed lease heartbeats, marks actors ORPHANED, reassigns them with epoch + 1, reloads state from PostgreSQL, and verifies unfinished messages. A pod restart is NOT reported as an actor recovery until verified.
+                            </p>
+                        </div>
+                        <!-- FIGURE 11 -->
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                            <div class="text-brand-amber font-bold">Figure 11: Singleton Failover &amp; Fencing Tokens</div>
+                            <p class="text-slate-400 font-sans">
+                                Singleton Coordinator acquires lease with fencing token (e.g., token 11). If Runtime A stalls or experiences GC pause, lease expires. Runtime B acquires lease with token 12. When Runtime A wakes up and attempts a write with token 11, PostgreSQL REJECTS it (11 &lt; 12).
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 11. SECURITY, OBSERVABILITY & RUNBOOKS -->
+                <section id="security-ops" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            11
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">11. Security, Observability &amp; Operations</h2>
+                            <p class="text-xs text-slate-400">STRIDE threat controls, structured logs, and operational runbooks</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Symptom</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Likely Cause</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Operator Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Desired replicas above ready</td>
+                                    <td class="px-4 py-2.5 text-slate-400">Cluster out of capacity or probe failure</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Inspect pod events &amp; node CPU/memory limits</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Actors stay ORPHANED</td>
+                                    <td class="px-4 py-2.5 text-slate-400">No READY runtime or Reconciler stopped</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Check runtimes table &amp; trigger rebalance</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Requests return 503</td>
+                                    <td class="px-4 py-2.5 text-slate-400">State store or owner unreachable</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Check PostgreSQL connection &amp; NetworkPolicy</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 12. SCALABILITY AND COST MODEL -->
+                <section id="scalability" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            12
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">12. Scalability &amp; Capacity Planning</h2>
+                            <p class="text-xs text-slate-400">Rendezvous hashing cost, DB bottleneck analysis, and local resource caps</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Minimal Movement</span>
+                            <span class="text-slate-400">Rendezvous hashing moves only ~1/(N+1) actors when adding replica N.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-amber font-bold block">PostgreSQL Throughput</span>
+                            <span class="text-slate-400">DB writes = (msg_rate * 3) + heartbeat updates. Heartbeats are batched per pod.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-emerald font-bold block">Local Zero-Cost</span>
+                            <span class="text-slate-400">Minikube &amp; Docker Compose run locally at near-zero cloud cost.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 13. VALIDATION AND TESTING PLAN -->
+                <section id="validation" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            13
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">13. Validation &amp; Test Matrix</h2>
+                            <p class="text-xs text-slate-400">Fault-injection test cases and benchmark metric definitions</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Test</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Injection</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Acceptance Check</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">Pod crash under load</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Delete owner pod during active msgs</td>
+                                    <td class="px-4 py-2.5 text-slate-400">Reassigned epoch+1; state recovered; 1 effective result</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">Stale owner write</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Pause runtime past TTL, then resume</td>
+                                    <td class="px-4 py-2.5 text-slate-400">Commit rejected by epoch check; 409 NOT_OWNER</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">Duplicate delivery</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Send identical message_id multiple times</td>
+                                    <td class="px-4 py-2.5 text-slate-400">Counter increases exactly once; stored result returned</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">Singleton failover</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Stall active singleton owner</td>
+                                    <td class="px-4 py-2.5 text-slate-400">Higher token acquired; stale writes rejected; never 2 owners</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 14. FEASIBILITY, RISKS AND IMPLEMENTATION PLAN -->
+                <section id="feasibility" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            14
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">14. Feasibility, Milestones &amp; Risk Register</h2>
+                            <p class="text-xs text-slate-400">Phase 2 milestones 1-6 and key risk mitigations</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-amber font-bold block">Risk: Compose cannot reach Minikube pods</span>
+                            <span class="text-slate-400 font-sans">Mitigation: Configure kubeconfig and networking deliberately; use API-server pod proxy or run router inside cluster.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-rose font-bold block">Risk: PostgreSQL write bottleneck</span>
+                            <span class="text-slate-400 font-sans">Mitigation: Batched heartbeats per runtime, message retention trimming policy.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 15. CONCLUSION AND FUTURE SCOPE -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            15
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">15. Conclusion &amp; Future Scope</h2>
+                            <p class="text-xs text-slate-400">Final engineering summary and Phase 2 roadmap</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            <strong class="text-white">ActorLab</strong> adds a thin but carefully specified layer, ownership epochs and fenced commits over disposable pods and a database, that supplies what Kubernetes lacks: stable actor identity, ordered processing, durable state, safe rebalancing and exclusive singletons.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-2">
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">1. KEDA Queue Autoscaling</span>
+                            <span class="text-slate-400">Scale pods based on mailbox backlog metrics rather than CPU.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-violet font-bold block">2. Database Sharding</span>
+                            <span class="text-slate-400">Shard PostgreSQL by lab_id or actor_id to scale write throughput.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-brand-emerald font-bold block">3. TLA+ Formal Verification</span>
+                            <span class="text-slate-400">Formal model of epoch fencing and handover safety rules.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 16. APPENDICES A TO D -->
+                <section id="appendices" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            16
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">16. Appendices A to D</h2>
+                            <p class="text-xs text-slate-400">Glossary, JSON payload, DB records &amp; Traceability matrix</p>
+                        </div>
+                    </div>
+
+                    <!-- APPENDIX A & B -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                            <div class="text-brand-indigo font-bold">Appendix B: Message Submission JSON</div>
+<pre class="text-slate-300">
+POST /api/v1/actors/counter-17/messages
+{
+  "message_id": "7c1e0d52-3f4a-4a0e-9d9a-0b6f2c1d8e11",
+  "type": "INCREMENT",
+  "payload": { "by": 1 }
+}
+Response 200 OK:
+{
+  "message_id": "7c1e0d52-3f4a-4a0e-9d9a-0b6f2c1d8e11",
+  "status": "DONE",
+  "result": { "value": 42, "version": 42 },
+  "owner_runtime": "runtime-pod-2",
+  "epoch": 7
+}
+</pre>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                            <div class="text-brand-violet font-bold">Appendix C: Sample Database Records</div>
+<pre class="text-slate-300">
+actors row:
+{ "actor_id": "counter-17", "owner": "pod-2",
+  "epoch": 7, "lease_expiry": "10:15:20Z" }
+
+singleton_ownership row:
+{ "name": "report-coordinator",
+  "owner": "pod-3", "fencing_token": 12 }
+</pre>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 17. LIVE ACTORLAB RUNTIME SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Live ActorLab Runtime Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive Cluster</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Send messages, scale pods, inject crashes to test epoch fencing &amp; singleton leases</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simScaleUp" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-plus text-brand-indigo mr-1"></i> Add Pod
+                            </button>
+                            <button id="simScaleDown" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-minus text-brand-amber mr-1"></i> Remove Pod
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Controls Grid -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+                            <div class="sm:col-span-3">
+                                <label class="block text-slate-400 mb-1 font-semibold">Actor Target</label>
+                                <select id="simActorSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="counter-17">counter-17 (Counter Actor)</option>
+                                    <option value="worker-01">worker-01 (Worker Actor)</option>
+                                    <option value="singleton-coord">singleton-coord (Singleton)</option>
+                                </select>
+                            </div>
+
+                            <div class="sm:col-span-3">
+                                <label class="block text-slate-400 mb-1 font-semibold">Message Type</label>
+                                <select id="simMsgType" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="INCREMENT">INCREMENT (+1)</option>
+                                    <option value="PROCESS">PROCESS (Work load)</option>
+                                </select>
+                            </div>
+
+                            <div class="sm:col-span-6 flex items-end gap-2">
+                                <button id="btnSendMsg" class="w-full py-2 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet hover:opacity-90 text-white font-bold text-xs transition shadow-glow-indigo">
+                                    <i class="fa-solid fa-paper-plane mr-1"></i> Send Message
+                                </button>
+                                <button id="btnCrashOwner" class="w-full py-2 rounded-lg bg-brand-rose/80 hover:bg-brand-rose text-white font-bold text-xs transition">
+                                    <i class="fa-solid fa-skull mr-1"></i> Crash Owner Pod
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Metrics Dashboard -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Active Pods</span>
+                            <div id="simMetricPods" class="text-lg font-bold text-brand-indigo">2 Pods</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Active Epoch</span>
+                            <div id="simMetricEpoch" class="text-lg font-bold text-brand-violet">Epoch 1</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Committed State Version</span>
+                            <div id="simMetricVersion" class="text-lg font-bold text-brand-emerald">v0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-1 text-center">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Singleton Token</span>
+                            <div id="simMetricToken" class="text-lg font-bold text-brand-amber">Token 1</div>
+                        </div>
+                    </div>
+
+                    <!-- Pod Placement & DB Log Visualizer -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                        
+                        <!-- Panel 1: Cluster Pods & Actor Mailbox -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-white font-bold flex items-center gap-2">
+                                    <i class="fa-solid fa-cubes text-brand-indigo"></i> Cluster Pod Affinity &amp; Mailboxes
+                                </span>
+                                <span class="text-[10px] text-slate-400">Rendezvous Hash</span>
+                            </div>
+                            <div id="simPodContainer" class="space-y-2 min-h-[160px] max-h-[220px] overflow-y-auto">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Live Execution Log -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-slate-400 font-bold flex items-center gap-2">
+                                    <i class="fa-solid fa-terminal text-brand-emerald"></i> ActorLab Fenced Execution Console
+                                </span>
+                                <span class="text-[10px] text-slate-500">PostgreSQL TX</span>
+                            </div>
+                            <div id="simConsole" class="min-h-[160px] max-h-[220px] overflow-y-auto space-y-1 text-slate-300">
+                                <div class="text-slate-500 italic">Simulator ready. Select an actor and click 'Send Message'...</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">A</div>
+                <span class="text-slate-300 font-semibold">Actor Model Runtime on Kubernetes (ActorLab)</span>
+            </div>
+            <div class="text-slate-400">
+                Group 09: Zaid Mulla (41) &amp; Mohd Adil Shaikh (57) | Guide: Mrs. Priya R.L.
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: SIMULATOR & INTERACTIVE UI -->
+    <script>
+        // Progress bar & scrollspy
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) current = sec.getAttribute('id');
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // Mobile TOC
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // Architecture Tabs
+        document.querySelectorAll('.arch-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.arch-tab').forEach(b => {
+                    b.classList.remove('active', 'bg-brand-indigo', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('active', 'bg-brand-indigo', 'text-white');
+                btn.classList.remove('text-slate-400');
+
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.arch-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById('arch-' + tab).classList.remove('hidden');
+            });
+        });
+
+        // Search Box
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            if (val.length > 0) clearSearch.classList.remove('hidden');
+            else clearSearch.classList.add('hidden');
+        });
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // ActorLab Cluster Simulator
+        class ActorLabSimulator {
+            constructor() {
+                this.pods = ['runtime-pod-1', 'runtime-pod-2'];
+                this.actors = {
+                    'counter-17': { owner: 'runtime-pod-1', epoch: 1, version: 0, val: 0, type: 'COUNTER' },
+                    'worker-01': { owner: 'runtime-pod-2', epoch: 1, version: 0, val: 0, type: 'WORKER' },
+                    'singleton-coord': { owner: 'runtime-pod-1', epoch: 1, version: 0, token: 1, type: 'SINGLETON' }
+                };
+                this.processedMsgs = new Set();
+                this.consoleLogs = [];
+                this.renderUI();
+            }
+
+            logConsole(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let colorClass = 'text-slate-300';
+                if (type === 'success') colorClass = 'text-brand-emerald font-semibold';
+                if (type === 'warn') colorClass = 'text-brand-amber';
+                if (type === 'error') colorClass = 'text-brand-rose';
+                if (type === 'step') colorClass = 'text-brand-indigo font-mono';
+
+                this.consoleLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.consoleLogs.length > 25) this.consoleLogs.pop();
+                document.getElementById('simConsole').innerHTML = this.consoleLogs.join('');
+            }
+
+            // Rendezvous placement
+            getOwnerForActor(actorId) {
+                if (this.pods.length === 0) return null;
+                let bestPod = this.pods[0];
+                let maxHash = -1;
+                this.pods.forEach(pod => {
+                    let hash = 0;
+                    const str = actorId + pod;
+                    for (let i = 0; i < str.length; i++) hash = (hash << 5) - hash + str.charCodeAt(i);
+                    if (hash > maxHash) {
+                        maxHash = hash;
+                        bestPod = pod;
+                    }
+                });
+                return bestPod;
+            }
+
+            sendMessage(actorId, msgType) {
+                const actor = this.actors[actorId];
+                if (!actor) return;
+
+                const msgId = 'msg-' + Math.random().toString(16).substring(2, 8);
+
+                // Deduplication check
+                if (this.processedMsgs.has(msgId)) {
+                    this.logConsole(`DUPLICATE IGNORED &rarr; Message ${msgId} already processed.`, 'warn');
+                    return;
+                }
+                this.processedMsgs.add(msgId);
+
+                // Check pod health
+                if (!this.pods.includes(actor.owner)) {
+                    this.logConsole(`OWNER DOWN &rarr; Pod ${actor.owner} crashed! Lease expired. Triggering orphan recovery...`, 'error');
+                    this.recoverOrphan(actorId);
+                    return;
+                }
+
+                // Fenced Commit TX
+                actor.version++;
+                if (actor.type === 'COUNTER') actor.val += 1;
+                if (actor.type === 'WORKER') actor.val += 10;
+                if (actor.type === 'SINGLETON') actor.token += 1;
+
+                this.logConsole(`TX COMMIT &rarr; [${actor.owner}] processed ${msgType} on ${actorId}. State v${actor.version} committed (Epoch ${actor.epoch}).`, 'success');
+                this.renderUI();
+            }
+
+            recoverOrphan(actorId) {
+                const actor = this.actors[actorId];
+                const newOwner = this.getOwnerForActor(actorId);
+                actor.epoch += 1;
+                actor.owner = newOwner;
+                this.logConsole(`ORPHAN RECOVERY &rarr; Reassigned ${actorId} to ${newOwner} (Epoch ${actor.epoch}). State loaded from last commit v${actor.version}.`, 'step');
+                this.renderUI();
+            }
+
+            crashOwner(actorId) {
+                const actor = this.actors[actorId];
+                const oldOwner = actor.owner;
+                this.logConsole(`FAILURE INJECTED &rarr; Pod ${oldOwner} killed! Lease heartbeats stopped.`, 'error');
+                this.pods = this.pods.filter(p => p !== oldOwner);
+                this.recoverOrphan(actorId);
+            }
+
+            scaleUp() {
+                const nextId = `runtime-pod-${this.pods.length + 1}`;
+                this.pods.push(nextId);
+                this.logConsole(`HPA SCALE UP &rarr; Created new pod ${nextId}. Rebalancing actors with rendezvous hashing...`, 'info');
+                
+                // Rebalance check
+                Object.keys(this.actors).forEach(aId => {
+                    const target = this.getOwnerForActor(aId);
+                    if (target !== this.actors[aId].owner) {
+                        const old = this.actors[aId].owner;
+                        this.actors[aId].owner = target;
+                        this.actors[aId].epoch += 1;
+                        this.logConsole(`REBALANCED &rarr; Migrated ${aId} from ${old} to ${target} (Epoch ${this.actors[aId].epoch}).`, 'step');
+                    }
+                });
+                this.renderUI();
+            }
+
+            scaleDown() {
+                if (this.pods.length <= 1) return;
+                const removed = this.pods.pop();
+                this.logConsole(`HPA SCALE DOWN &rarr; Removing ${removed}. Draining and transferring actors...`, 'warn');
+                Object.keys(this.actors).forEach(aId => {
+                    if (this.actors[aId].owner === removed) {
+                        this.recoverOrphan(aId);
+                    }
+                });
+                this.renderUI();
+            }
+
+            reset() {
+                this.pods = ['runtime-pod-1', 'runtime-pod-2'];
+                this.actors = {
+                    'counter-17': { owner: 'runtime-pod-1', epoch: 1, version: 0, val: 0, type: 'COUNTER' },
+                    'worker-01': { owner: 'runtime-pod-2', epoch: 1, version: 0, val: 0, type: 'WORKER' },
+                    'singleton-coord': { owner: 'runtime-pod-1', epoch: 1, version: 0, token: 1, type: 'SINGLETON' }
+                };
+                this.consoleLogs = [];
+                this.logConsole('Cluster reset to clean initial state.', 'info');
+                this.renderUI();
+            }
+
+            renderUI() {
+                document.getElementById('simMetricPods').innerText = `${this.pods.length} Pods`;
+                const sel = document.getElementById('simActorSelect').value;
+                const actor = this.actors[sel];
+
+                if (actor) {
+                    document.getElementById('simMetricEpoch').innerText = `Epoch ${actor.epoch}`;
+                    document.getElementById('simMetricVersion').innerText = `v${actor.version}`;
+                    document.getElementById('simMetricToken').innerText = `Token ${actor.token || actor.epoch}`;
+                }
+
+                // Render Pods
+                const container = document.getElementById('simPodContainer');
+                container.innerHTML = this.pods.map(pod => {
+                    const hosted = Object.keys(this.actors).filter(a => this.actors[a].owner === pod);
+                    return `
+                        <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-white">${pod}</span>
+                                <span class="text-[9px] px-2 py-0.5 rounded bg-brand-emerald/20 text-brand-emerald font-bold">READY</span>
+                            </div>
+                            <div class="text-[10px] text-slate-400">Hosted Actors: ${hosted.length > 0 ? hosted.join(', ') : 'None'}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        const sim = new ActorLabSimulator();
+
+        document.getElementById('btnSendMsg').addEventListener('click', () => {
+            const a = document.getElementById('simActorSelect').value;
+            const t = document.getElementById('simMsgType').value;
+            sim.sendMessage(a, t);
+        });
+
+        document.getElementById('btnCrashOwner').addEventListener('click', () => {
+            const a = document.getElementById('simActorSelect').value;
+            sim.crashOwner(a);
+        });
+
+        document.getElementById('simScaleUp').addEventListener('click', () => sim.scaleUp());
+        document.getElementById('simScaleDown').addEventListener('click', () => sim.scaleDown());
+        document.getElementById('simReset').addEventListener('click', () => sim.reset());
+        document.getElementById('simActorSelect').addEventListener('change', () => sim.renderUI());
+    </script>
+</body>
+</html>

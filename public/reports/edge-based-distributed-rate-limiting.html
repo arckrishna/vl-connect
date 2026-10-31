@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edge-Based Distributed Rate Limiting Middleware</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.3)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
+              'glow-rose': '0 0 25px -5px rgba(244, 63, 94, 0.3)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      /* Custom Scrollbar & Aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      /* Glow Effects */
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    C
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        CortexAI Middleware
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">Distributed Rate Limiter</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Virtual Lab Report • Software System Design</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Simulator Jump -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Rate Limit Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">Title & Abstract</a>
+                            <a href="#chapter1" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Chapter 1: Introduction</a>
+                            <a href="#chapter2" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Chapter 2: Feasibility Study</a>
+                            <a href="#chapter3" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Chapter 3: System Design & Architecture</a>
+                            <a href="#chapter4" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Chapter 4: Tech Stack & Implementation</a>
+                            <a href="#chapter5" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Chapter 5: Testing & Results</a>
+                            <a href="#chapter6" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Chapter 6: Conclusion & Future Scope</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> Interactive Rate Limiter
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Author Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Submission Details</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Faculty Incharge</span>
+                                <span class="text-slate-200 font-semibold">Dr. Priya R.L</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Submitted By</span>
+                                <span class="text-slate-200 font-medium block">Krish Bhandari (Roll No. 07)</span>
+                                <span class="text-slate-200 font-medium block">Twinkle Gupta (Roll No. 14)</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>CMPN Div D12C</span>
+                                <span class="text-brand-indigo font-mono">VESIT 2026-27</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">Title & Abstract</a>
+                        <a href="#chapter1" class="mobile-toc-link block py-2 text-slate-300">Chapter 1: Introduction</a>
+                        <a href="#chapter2" class="mobile-toc-link block py-2 text-slate-300">Chapter 2: Feasibility Study</a>
+                        <a href="#chapter3" class="mobile-toc-link block py-2 text-slate-300">Chapter 3: System Design</a>
+                        <a href="#chapter4" class="mobile-toc-link block py-2 text-slate-300">Chapter 4: Implementation</a>
+                        <a href="#chapter5" class="mobile-toc-link block py-2 text-slate-300">Chapter 5: Testing & Results</a>
+                        <a href="#chapter6" class="mobile-toc-link block py-2 text-slate-300">Chapter 6: Conclusion</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">Interactive Rate Limiter</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- HERO & TITLE SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-shield-halved"></i> Virtual Lab Report
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Software System Design
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                VESIT (2026–2027)
+                            </span>
+                        </div>
+
+                        <!-- Main Title -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            CortexAI – <span class="gradient-text">Edge-Based Distributed Rate Limiting Middleware</span>
+                        </h1>
+
+                        <!-- Abstract Section -->
+                        <div class="space-y-3 pt-2">
+                            <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider">Abstract</h3>
+                            <p class="text-slate-300 text-sm leading-relaxed">
+                                Modern web applications rely on APIs and multiple backend services to handle user requests efficiently. As the number of users and incoming requests increases, these services may experience excessive traffic, which can affect system availability, response time, and resource utilization. Rate limiting is an important technique used to control the number of requests a user can make within a specified time interval. It helps prevent excessive API usage, protects backend services from unnecessary load, and supports fair usage of application resources.
+                            </p>
+                            <p class="text-slate-300 text-sm leading-relaxed">
+                                CortexAI – Edge-Based Distributed Rate Limiting Middleware is a web-based system designed to demonstrate API request control within a service-oriented application architecture. The system uses a Node.js and Express.js backend, with a gateway responsible for routing requests to appropriate backend services. Authentication is handled through session-based validation, while Redis is used to store session information and shared rate-limit counters across distributed instances.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 1: INTRODUCTION -->
+                <section id="chapter1" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Chapter 1: Introduction</h2>
+                            <p class="text-xs text-slate-400">Background, Problem Statement, Objectives, and Scope</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <span class="text-brand-indigo">1.1</span> Background
+                        </h3>
+                        <p>
+                            API-based applications commonly divide functionality across services. When many requests reach a service in a short period, they may consume compute capacity, increase latency, or reduce availability for other users. Rate limiting restricts the number of requests permitted for a user, route, or operation during a specified time window. CortexAI is a modular AI platform with services for authentication, chat, AI-agent workflows, and billing. Its gateway is the common entry point for several backend routes, and Redis provides shared session and rate-limit data.
+                        </p>
+
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2 pt-2">
+                            <span class="text-brand-indigo">1.2</span> Problem Statement
+                        </h3>
+                        <p>
+                            Applications that expose multiple APIs may receive excessive requests from individual users or clients. Without suitable request controls, repeated requests can increase service workload, consume available resources, and affect the responsiveness of the application. The project focuses on understanding and documenting rate-limiting mechanisms within CortexAI. The rate limiter in the supplied code tracks requests using user-specific and agent-specific counters, applies configured request limits, and rejects requests that exceed those limits with HTTP 429 status codes.
+                        </p>
+
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2 pt-2">
+                            <span class="text-brand-indigo">1.3</span> Objectives
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2">
+                                <i class="fa-solid fa-check text-brand-emerald mt-0.5"></i>
+                                <span>Study the architecture of CortexAI and the role of its API gateway.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2">
+                                <i class="fa-solid fa-check text-brand-emerald mt-0.5"></i>
+                                <span>Understand how client requests are routed to backend microservices.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2">
+                                <i class="fa-solid fa-check text-brand-emerald mt-0.5"></i>
+                                <span>Examine the existing Redis-based rate-limiting mechanism.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2">
+                                <i class="fa-solid fa-check text-brand-emerald mt-0.5"></i>
+                                <span>Explain the fixed-window counter algorithm and its TTL expiration behavior.</span>
+                            </div>
+                        </div>
+
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2 pt-2">
+                            <span class="text-brand-indigo">1.4</span> Scope of the Project
+                        </h3>
+                        <p>
+                            The report covers the CortexAI repository with emphasis on the gateway, Agent service, Redis integration, and rate-limit configuration. It documents existing implementations and establishes rigorous test suites.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 2: FEASIBILITY STUDY AND REQUIREMENTS -->
+                <section id="chapter2" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Chapter 2: Feasibility Study and Requirements</h2>
+                            <p class="text-xs text-slate-400">Overview, Existing Limitations, Requirements Table, and Feasibility Analysis</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <h3 class="text-sm font-bold text-white">2.1 Overview of CortexAI & Existing Limitations</h3>
+                        <p>
+                            CortexAI uses a React/Vite frontend and Node.js/Express services. The gateway routes authentication requests to the Auth service and protected chat, agent, and billing requests to their respective services. The Agent service coordinates specialized workflows such as chat, coding, PDF, presentation, image, vision, and search tasks. The rate-limit check is located in the Agent service flow.
+                        </p>
+
+                        <h3 class="text-sm font-bold text-white pt-2">2.2 System Requirements</h3>
+                        <div class="overflow-x-auto rounded-xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Type</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Requirement Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-brand-indigo">Functional</td>
+                                        <td class="px-4 py-3">Validate the session for protected gateway routes using Redis store.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-brand-indigo">Functional</td>
+                                        <td class="px-4 py-3">Forward authenticated user identity to protected downstream services.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-brand-indigo">Functional</td>
+                                        <td class="px-4 py-3">Track request counts by user and agent type using Redis INCR & TTL.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-brand-indigo">Functional</td>
+                                        <td class="px-4 py-3">Reject requests exceeding configured limits with HTTP 429 Too Many Requests.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-brand-violet">Non-functional</td>
+                                        <td class="px-4 py-3">Maintain modular request handling and shared distributed state across service instances.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h3 class="text-sm font-bold text-white pt-2">2.3 Feasibility Analysis</h3>
+                        <p>
+                            <strong>Technical Feasibility:</strong> Utilizes established technologies including Node.js, Express, Redis, and ioredis.<br>
+                            <strong>Economic Feasibility:</strong> Local development setup uses open-source software stack and Redis, keeping prototype costs minimal.<br>
+                            <strong>Operational Feasibility:</strong> Clean service-based architecture separates gateway routing from agent rate limiting.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 3: SYSTEM DESIGN AND ARCHITECTURE -->
+                <section id="chapter3" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Chapter 3: System Design and Architecture</h2>
+                            <p class="text-xs text-slate-400">Architecture, Request Workflow, Fixed-Window Algorithm, and System Flowchart</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <h3 class="text-sm font-bold text-white">3.1 System Architecture & Flowchart</h3>
+                        <p>
+                            CortexAI follows a gateway-and-microservices structure. The frontend communicates with the gateway, which routes requests to Auth, Chat, Agent, and Billing services. Redis stores session information and the Agent service's rate-limit counters.
+                        </p>
+
+                        <!-- System Flowchart SVG/HTML Diagram matching report -->
+                        <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4">
+                            <div class="text-center font-bold text-white text-xs uppercase tracking-wider text-brand-indigo">
+                                CortexAI – System Flowchart (Request Processing and Rate-Limiting Flow)
+                            </div>
+                            
+                            <div class="flex flex-col items-center space-y-3 py-2 text-xs font-mono">
+                                <!-- Start -->
+                                <div class="px-6 py-2 rounded-xl bg-brand-emerald/20 border border-brand-emerald text-emerald-300 font-bold">
+                                    Start: Client Application Sends Request
+                                </div>
+                                <div class="text-slate-600"><i class="fa-solid fa-arrow-down"></i></div>
+
+                                <!-- Edge / Gateway -->
+                                <div class="w-full max-w-md p-3 rounded-xl bg-brand-indigo/15 border border-brand-indigo/40 text-center">
+                                    <div class="font-bold text-indigo-300">Edge Layer / API Gateway (Node.js + Express)</div>
+                                    <div class="text-[11px] text-slate-400">Authentication Middleware validates session cookie against Redis</div>
+                                </div>
+                                <div class="text-slate-600"><i class="fa-solid fa-arrow-down"></i></div>
+
+                                <!-- Valid Session Decision -->
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-700 text-center w-64">
+                                    <div class="font-bold text-white">Valid Session?</div>
+                                    <div class="flex justify-around pt-2 text-[11px]">
+                                        <span class="text-brand-rose font-bold">No &rarr; Return 401</span>
+                                        <span class="text-brand-emerald font-bold">Yes &rarr; Agent Service</span>
+                                    </div>
+                                </div>
+                                <div class="text-slate-600"><i class="fa-solid fa-arrow-down"></i></div>
+
+                                <!-- Agent Service & Redis Rate Limiter -->
+                                <div class="w-full max-w-md p-4 rounded-xl bg-slate-900 border border-brand-amber/40 space-y-2">
+                                    <div class="font-bold text-brand-amber flex items-center justify-between">
+                                        <span>Agent Service (Rate-Limiting Logic)</span>
+                                        <span class="text-[10px] bg-brand-amber/20 px-2 py-0.5 rounded text-amber-300">Fixed Window</span>
+                                    </div>
+                                    <div class="text-[11px] text-slate-300">
+                                        • Chat Agent: 20 req/min<br>
+                                        • Coding, PDF, PPT, Image, Search: 5 req/min<br>
+                                        • Redis key: <code class="text-indigo-300">rate:&lt;userId&gt;:&lt;agent&gt;</code> with 60s TTL
+                                    </div>
+                                </div>
+                                <div class="text-slate-600"><i class="fa-solid fa-arrow-down"></i></div>
+
+                                <!-- Rate Limit Check -->
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-700 text-center w-72">
+                                    <div class="font-bold text-white">Within Rate Limit?</div>
+                                    <div class="flex justify-around pt-2 text-[11px]">
+                                        <span class="text-brand-rose font-bold">No &rarr; Return 429 Too Many Requests</span>
+                                        <span class="text-brand-emerald font-bold">Yes &rarr; Process Core Service</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3 class="text-sm font-bold text-white pt-2">3.2 Rate-Limiting Algorithm</h3>
+                        <p>
+                            The Agent rate limiter implements a Redis fixed-window counter. Limits are configured per agent category. When a request arrives, the code creates a key <code class="text-brand-cyan">rate:&lt;userId&gt;:&lt;agent&gt;</code> and increments it using <code class="text-brand-cyan">INCR</code>. When the count first becomes one, a 60-second expiry (<code class="text-brand-cyan">EXPIRE</code>) is applied. If the count exceeds the maximum, an error with HTTP status 429 is raised.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 4: TECHNOLOGY STACK AND IMPLEMENTATION -->
+                <section id="chapter4" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Chapter 4: Technology Stack and Implementation</h2>
+                            <p class="text-xs text-slate-400">Technologies, Project Structure, Gateway, Redis Integration, and Error Handling</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-brand-indigo font-bold block mb-1">Backend Runtime</span>
+                                <span class="text-slate-400">Node.js & Express.js for gateway and microservices.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-brand-violet font-bold block mb-1">Distributed State</span>
+                                <span class="text-slate-400">Redis & ioredis client for session storage and rate limits.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-brand-emerald font-bold block mb-1">Frontend Client</span>
+                                <span class="text-slate-400">React and Vite interface with Tailwind CSS styling.</span>
+                            </div>
+                        </div>
+
+                        <h3 class="text-sm font-bold text-white pt-2">4.4 Redis Integration & Rate-Limit Enforcement</h3>
+                        <p>
+                            The shared Redis module connects via <code class="text-brand-cyan">REDIS_URL</code>. The Agent service rate-limit configuration uses Redis <code class="text-brand-cyan">INCR</code>, <code class="text-brand-cyan">EXPIRE</code>, and <code class="text-brand-cyan">TTL</code> to maintain request counts and calculate remaining time windows.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 5: TESTING AND RESULTS -->
+                <section id="chapter5" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Chapter 5: Testing and Results</h2>
+                            <p class="text-xs text-slate-400">Validation Plan and Comprehensive Test Cases</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <div class="overflow-x-auto rounded-xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">ID</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Test Scenario</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Expected Result</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-01</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Call public gateway route</td>
+                                        <td class="px-4 py-3 text-slate-400">Gateway returns configured greeting response.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-02</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Access protected route without session</td>
+                                        <td class="px-4 py-3 text-slate-400">Gateway returns HTTP 401 unauthorized.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-03</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Access route with expired session</td>
+                                        <td class="px-4 py-3 text-slate-400">Gateway returns HTTP 401 session expired.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-04</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Agent request within limit</td>
+                                        <td class="px-4 py-3 text-slate-400">Rate-limit check allows request to continue.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-05</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Exceed Chat limit (&gt;20 req/min)</td>
+                                        <td class="px-4 py-3 text-slate-400">Rate limiter raises HTTP 429 with limit & retry details.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-06</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Exceed Coding/PDF limit (&gt;5 req/min)</td>
+                                        <td class="px-4 py-3 text-slate-400">Rate limiter applies configured limit of 5 requests per minute.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-07</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Wait for TTL expiration & retry</td>
+                                        <td class="px-4 py-3 text-slate-400">Expired counter starts a new window on next increment.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-mono font-bold text-brand-indigo">TC-08</td>
+                                        <td class="px-4 py-3 font-semibold text-white">Simulate Redis Failure</td>
+                                        <td class="px-4 py-3 text-slate-400">Observe error handling path; verify graceful fallback.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 6: CONCLUSION AND FUTURE SCOPE -->
+                <section id="chapter6" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Chapter 6: Conclusion and Future Scope</h2>
+                            <p class="text-xs text-slate-400">Conclusion, Limitations, and Future Roadmap</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <h3 class="text-sm font-bold text-white">6.1 Conclusion</h3>
+                        <p>
+                            CortexAI demonstrates a service-oriented backend with an Express gateway, protected routes, Redis-backed session storage, and a fixed-window rate limiter in the Agent service. The limiter uses per-user and per-agent counters with a 60-second expiry and returns structured HTTP 429 errors when limits are exceeded.
+                        </p>
+
+                        <h3 class="text-sm font-bold text-white pt-2">6.2 Future Scope</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">Gateway-Wide Policies</strong>
+                                <span class="text-slate-400">Apply rate limiting uniformly at the API gateway entry point rather than individual agent services.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">Atomic Lua Scripting</strong>
+                                <span class="text-slate-400">Combine counter increments and TTL expiration into atomic Redis Lua scripts.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">Sliding Window Algorithms</strong>
+                                <span class="text-slate-400">Compare fixed-window with sliding-window log and token bucket algorithms.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">Distributed Load Testing</strong>
+                                <span class="text-slate-400">Conduct multi-instance cluster testing under high concurrent request volume.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- LIVE INTERACTIVE RATE-LIMITING SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/40">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Interactive Rate-Limiting Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Live Sandbox</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Test agent requests, Redis fixed-window counters, HTTP 429 rejections, TTL resets, and failover</p>
+                            </div>
+                        </div>
+
+                        <!-- Reset / Presets -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset Counters
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Controls -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+                            <div class="sm:col-span-4">
+                                <label class="block text-slate-400 mb-1 font-semibold">User Identifier</label>
+                                <input type="text" id="simUserId" value="user_07" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                            </div>
+                            <div class="sm:col-span-4">
+                                <label class="block text-slate-400 mb-1 font-semibold">Agent Category</label>
+                                <select id="simAgentType" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="chat">Chat Agent (Limit: 20 req/min)</option>
+                                    <option value="coding">Coding Agent (Limit: 5 req/min)</option>
+                                    <option value="pdf">PDF Agent (Limit: 5 req/min)</option>
+                                    <option value="image">Image Agent (Limit: 5 req/min)</option>
+                                    <option value="search">Search Agent (Limit: 5 req/min)</option>
+                                </select>
+                            </div>
+                            <div class="sm:col-span-4 flex items-end gap-2">
+                                <button id="btnSendRequest" class="w-full py-2.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet hover:opacity-90 text-white font-bold text-xs transition shadow-glow-indigo">
+                                    Send API Request
+                                </button>
+                                <button id="btnBurst" class="w-full py-2.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition">
+                                    Burst 6 Requests
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Failover & TTL controls -->
+                        <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs">
+                            <div class="flex items-center gap-2">
+                                <button id="btnToggleRedis" class="px-4 py-2 rounded-xl bg-brand-emerald/20 hover:bg-brand-emerald/30 text-brand-emerald border border-brand-emerald/40 font-bold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-server"></i> Redis Status: <span id="redisStatusText">ONLINE</span>
+                                </button>
+                                <button id="btnExpireTTL" class="px-4 py-2 rounded-xl bg-brand-amber/20 hover:bg-brand-amber/30 text-brand-amber border border-brand-amber/40 font-bold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-clock"></i> Simulate TTL Expiration (Reset Window)
+                                </button>
+                            </div>
+                            <div class="text-slate-400 text-[11px] font-mono">
+                                Redis Key: <code id="activeRedisKey" class="text-indigo-300">rate:user_07:chat</code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Output State Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-mono">
+                        <!-- Panel 1: Redis Counters -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-indigo flex items-center gap-1.5">
+                                    <i class="fa-solid fa-database"></i> Redis Counter State
+                                </span>
+                                <span id="counterBadge" class="text-[10px] px-2 py-0.5 rounded bg-brand-indigo/20 text-indigo-300 font-bold">Active</span>
+                            </div>
+                            <div id="redisCounterView" class="space-y-2 min-h-[140px]">
+                                <div class="text-slate-400 text-center pt-10">No active request counters</div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Response Status -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-emerald flex items-center gap-1.5">
+                                    <i class="fa-solid fa-square-poll-vertical"></i> HTTP Response Status
+                                </span>
+                                <span class="text-[10px] text-slate-400">Gateway</span>
+                            </div>
+                            <div id="responseStatusView" class="space-y-2 min-h-[140px] flex flex-col items-center justify-center text-center">
+                                <span class="text-slate-500 italic">Send an API request to view response code & JSON payload</span>
+                            </div>
+                        </div>
+
+                        <!-- Panel 3: Live Execution Trace -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-slate-300 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-terminal text-brand-emerald"></i> Execution Log
+                                </span>
+                                <span class="text-[10px] text-slate-500">Real-time Trace</span>
+                            </div>
+                            <div id="simTraceLog" class="min-h-[130px] max-h-[140px] overflow-y-auto space-y-1 text-slate-300 text-[11px]">
+                                <div class="text-slate-500 italic">Simulator ready. Click 'Send API Request'.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">C</div>
+                <span class="text-slate-300 font-semibold">CortexAI – Edge-Based Distributed Rate Limiting Middleware</span>
+            </div>
+            <div class="text-slate-400">
+                Faculty Incharge: Dr. Priya R.L | VESIT (2026–2027)
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: INTERACTIVE SIMULATOR & NAVIGATION -->
+    <script>
+        // Reading Progress Bar
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+        });
+
+        // Mobile TOC
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // --- RATE LIMIT SIMULATOR ENGINE ---
+        class RateLimiterSimulator {
+            constructor() {
+                this.counters = {}; // key -> { count, ttl }
+                this.isRedisOnline = true;
+                this.limits = {
+                    chat: 20,
+                    coding: 5,
+                    pdf: 5,
+                    image: 5,
+                    search: 5
+                };
+                this.traceLogs = [];
+                this.lastResponse = null;
+            }
+
+            logTrace(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let color = 'text-slate-300';
+                if (type === 'success') color = 'text-brand-emerald font-semibold';
+                if (type === 'warn') color = 'text-brand-amber';
+                if (type === 'error') color = 'text-brand-rose font-bold';
+                if (type === 'step') color = 'text-brand-indigo font-mono';
+
+                this.traceLogs.unshift(`<div class="${color}">[${time}] ${msg}</div>`);
+                if (this.traceLogs.length > 25) this.traceLogs.pop();
+                this.renderUI();
+            }
+
+            sendRequest() {
+                const userId = document.getElementById('simUserId').value.trim() || 'user_07';
+                const agent = document.getElementById('simAgentType').value;
+                const limit = this.limits[agent] || 20;
+                const redisKey = `rate:${userId}:${agent}`;
+                
+                document.getElementById('activeRedisKey').innerText = redisKey;
+
+                if (!this.isRedisOnline) {
+                    this.logTrace(`Redis error: Connection refused for ${redisKey}. Failover triggered.`, 'error');
+                    this.lastResponse = { status: 503, body: { error: 'Redis unavailable', message: 'Service degraded' } };
+                    this.renderUI();
+                    return;
+                }
+
+                // Initialize counter if missing
+                if (!this.counters[redisKey]) {
+                    this.counters[redisKey] = { count: 0, ttl: 60 };
+                }
+
+                const currentData = this.counters[redisKey];
+
+                if (currentData.count >= limit) {
+                    this.logTrace(`Rate limit exceeded for ${agent} agent (${currentData.count}/${limit}). Returning HTTP 429.`, 'error');
+                    this.lastResponse = {
+                        status: 429,
+                        body: {
+                            statusCode: 429,
+                            error: 'Too Many Requests',
+                            message: `Rate limit exceeded for ${agent} agent. Limit is ${limit} requests per minute.`,
+                            retryAfterSeconds: currentData.ttl
+                        }
+                    };
+                } else {
+                    currentData.count++;
+                    this.logTrace(`INCR ${redisKey} &rarr; Count: ${currentData.count}/${limit} (TTL: ${currentData.ttl}s)`, 'success');
+                    this.lastResponse = {
+                        status: 200,
+                        body: {
+                            success: true,
+                            agent: agent,
+                            requestsRemaining: limit - currentData.count,
+                            resetInSeconds: currentData.ttl
+                        }
+                    };
+                }
+
+                this.renderUI();
+            }
+
+            burstRequests() {
+                const agent = document.getElementById('simAgentType').value;
+                this.logTrace(`Initiating burst of 6 requests for ${agent} agent...`, 'step');
+                for (let i = 0; i < 6; i++) {
+                    setTimeout(() => {
+                        this.sendRequest();
+                    }, i * 100);
+                }
+            }
+
+            expireTTL() {
+                const userId = document.getElementById('simUserId').value.trim() || 'user_07';
+                const agent = document.getElementById('simAgentType').value;
+                const redisKey = `rate:${userId}:${agent}`;
+
+                if (this.counters[redisKey]) {
+                    this.counters[redisKey].count = 0;
+                    this.counters[redisKey].ttl = 60;
+                    this.logTrace(`TTL Expired / Window Reset for ${redisKey}. Counter reset to 0.`, 'warn');
+                } else {
+                    this.logTrace(`No active counter found for ${redisKey} to expire.`, 'info');
+                }
+                this.renderUI();
+            }
+
+            toggleRedis() {
+                this.isRedisOnline = !this.isRedisOnline;
+                const statusEl = document.getElementById('redisStatusText');
+                const btn = document.getElementById('btnToggleRedis');
+                if (this.isRedisOnline) {
+                    statusEl.innerText = 'ONLINE';
+                    btn.className = 'px-4 py-2 rounded-xl bg-brand-emerald/20 hover:bg-brand-emerald/30 text-brand-emerald border border-brand-emerald/40 font-bold transition flex items-center gap-1.5';
+                    this.logTrace('Redis connection re-established successfully.', 'success');
+                } else {
+                    statusEl.innerText = 'OFFLINE (FAILEDOVER)';
+                    btn.className = 'px-4 py-2 rounded-xl bg-brand-rose/20 hover:bg-brand-rose/30 text-brand-rose border border-brand-rose/40 font-bold transition flex items-center gap-1.5';
+                    this.logTrace('Redis connection lost! Simulating cluster failover.', 'error');
+                }
+                this.renderUI();
+            }
+
+            resetAll() {
+                this.counters = {};
+                this.traceLogs = [];
+                this.lastResponse = null;
+                this.logTrace('All rate-limit counters reset.', 'info');
+                this.renderUI();
+            }
+
+            renderUI() {
+                // Redis Counter View
+                const counterView = document.getElementById('redisCounterView');
+                const keys = Object.keys(this.counters);
+                if (keys.length === 0) {
+                    counterView.innerHTML = `<div class="text-slate-500 text-center pt-8 text-[11px]">No active rate-limit keys in Redis</div>`;
+                } else {
+                    counterView.innerHTML = keys.map(k => {
+                        const data = this.counters[k];
+                        const parts = k.split(':');
+                        const agentType = parts[2];
+                        const maxLimit = this.limits[agentType] || 20;
+                        const isExceeded = data.count >= maxLimit;
+                        return `
+                            <div class="p-2 rounded bg-slate-800 border ${isExceeded ? 'border-brand-rose/60 bg-brand-rose/10' : 'border-slate-700'} space-y-1">
+                                <div class="flex items-center justify-between text-[11px]">
+                                    <span class="text-white font-bold truncate">${k}</span>
+                                    <span class="${isExceeded ? 'text-brand-rose' : 'text-brand-emerald'} font-bold">${data.count}/${maxLimit}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400 flex justify-between">
+                                    <span>TTL: ${data.ttl}s</span>
+                                    <span>${isExceeded ? 'BLOCKED (429)' : 'ALLOWED'}</span>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                // Response Status View
+                const respView = document.getElementById('responseStatusView');
+                if (!this.lastResponse) {
+                    respView.innerHTML = `<span class="text-slate-500 italic text-[11px]">Send an API request to view response code & JSON payload</span>`;
+                } else {
+                    const status = this.lastResponse.status;
+                    const isErr = status === 429 || status === 503;
+                    respView.innerHTML = `
+                        <div class="w-full space-y-2 text-left">
+                            <div class="flex items-center justify-between">
+                                <span class="text-[10px] text-slate-400">HTTP Status:</span>
+                                <span class="px-2 py-0.5 rounded text-xs font-bold ${isErr ? 'bg-brand-rose/20 text-brand-rose border border-brand-rose/30' : 'bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/30'}">${status} ${isErr ? (status === 429 ? 'Too Many Requests' : 'Service Unavailable') : 'OK'}</span>
+                            </div>
+                            <pre class="bg-slate-950 p-2 rounded text-[10px] text-indigo-200 overflow-x-auto border border-slate-800"><code>${JSON.stringify(this.lastResponse.body, null, 2)}</code></pre>
+                        </div>
+                    `;
+                }
+
+                // Trace log
+                document.getElementById('simTraceLog').innerHTML = this.traceLogs.join('');
+            }
+        }
+
+        const sim = new RateLimiterSimulator();
+
+        document.getElementById('btnSendRequest').addEventListener('click', () => sim.sendRequest());
+        document.getElementById('btnBurst').addEventListener('click', () => sim.burstRequests());
+        document.getElementById('btnExpireTTL').addEventListener('click', () => sim.expireTTL());
+        document.getElementById('btnToggleRedis').addEventListener('click', () => sim.toggleRedis());
+        document.getElementById('simReset').addEventListener('click', () => sim.resetAll());
+    </script>
+</body>
+</html>

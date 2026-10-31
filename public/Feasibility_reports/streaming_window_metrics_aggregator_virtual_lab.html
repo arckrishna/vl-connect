@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Feasibility study for the Streaming Window Metrics Aggregator integrated with a Library Management System.">
+<title>Streaming Window Metrics Aggregator</title>
+<style>
+:root {
+  --bg:#f4f7fb; --surface:#fff; --ink:#172338; --muted:#64748b;
+  --line:#e4eaf2; --accent:#2563eb; --accent2:#0f766e;
+  --soft:#eff6ff; --shadow:0 12px 32px rgba(25,45,80,.07);
+}
+* {box-sizing:border-box}
+html {scroll-behavior:smooth; scroll-padding-top:28px}
+body {margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.layout {max-width:1440px;margin:auto;display:grid;grid-template-columns:260px minmax(0,1fr);gap:30px;padding:28px}
+.sidebar {position:sticky;top:24px;align-self:start;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow)}
+.brand {font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.sidebar h2 {font-size:17px;line-height:1.35;margin:0 0 20px}
+.nav {display:grid;gap:6px}
+.nav a {text-decoration:none;color:#53627a;padding:9px 11px;border-radius:9px;font-size:13px;font-weight:600}
+.nav a:hover {background:var(--soft);color:var(--accent)}
+.content {min-width:0}
+.hero {position:relative;overflow:hidden;background:linear-gradient(120deg,#10294e,#1d4f91 65%,#0f766e);color:#fff;border-radius:22px;padding:42px 44px;margin-bottom:22px;box-shadow:var(--shadow)}
+.hero:after {content:"";position:absolute;width:310px;height:310px;border:1px solid rgba(255,255,255,.16);border-radius:50%;right:-80px;top:-140px;box-shadow:0 0 0 35px rgba(255,255,255,.035),0 0 0 75px rgba(255,255,255,.025)}
+.eyebrow {font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#bfdbfe;font-weight:800}
+.hero h1 {font-size:clamp(28px,4vw,43px);line-height:1.12;max-width:780px;margin:12px 0}
+.hero p {color:#dbeafe;max-width:760px;margin:0;font-size:16px}
+.hero-chip {display:inline-flex;margin-top:22px;padding:6px 11px;border:1px solid rgba(255,255,255,.25);border-radius:999px;font-size:12px;color:#e0f2fe}
+.card {background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:28px 30px;margin-bottom:18px;box-shadow:var(--shadow)}
+.section-head {display:flex;align-items:center;gap:13px;margin-bottom:16px}
+.number {display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:11px;background:var(--soft);color:var(--accent);font-weight:800}
+h2 {font-size:21px;line-height:1.3;margin:0}
+h3 {font-size:16px;margin:22px 0 10px}
+p {margin:10px 0;color:#475569}
+.lead {font-size:16px;color:#334155}
+.note {background:#f0fdfa;border-left:3px solid var(--accent2);padding:13px 16px;border-radius:0 10px 10px 0;color:#285b57;margin-top:18px}
+.table-wrap {overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:18px}
+table {width:100%;border-collapse:collapse;min-width:620px;text-align:left}
+th {background:#f7f9fc;color:#52627a;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+th,td {padding:13px 15px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td {border-bottom:0}
+td {color:#405069}
+.tag {display:inline-block;background:#eff6ff;color:#1d4ed8;padding:3px 8px;border-radius:6px;font-size:12px;font-weight:700}
+.bullet-list {padding-left:21px;color:#475569}
+.bullet-list li {padding:4px 0}
+.stages {list-style:none;padding:0;margin:20px 0 0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stages li {display:flex;align-items:flex-start;gap:12px;padding:13px;border:1px solid var(--line);border-radius:12px;background:#fcfdff;color:#405069}
+.step {font-size:11px;font-weight:800;color:var(--accent);background:var(--soft);border-radius:7px;padding:4px 6px}
+.conclusion {background:linear-gradient(120deg,#eff6ff,#f0fdfa);border:1px solid #d9e8f8}
+.footer {text-align:center;color:#8a97aa;font-size:12px;padding:10px 0 22px}
+@media(max-width:900px) {
+ .layout {grid-template-columns:1fr;padding:16px;gap:16px}
+ .sidebar {position:static;padding:16px}
+ .sidebar h2 {margin-bottom:12px}
+ .nav {display:flex;overflow-x:auto;padding-bottom:3px}
+ .nav a {white-space:nowrap}
+ .hero {padding:32px 26px}
+}
+@media(max-width:600px) {
+ .card {padding:21px 18px}
+ .hero {border-radius:16px}
+ .stages {grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">Virtual Lab · Feasibility</div>
+    <h2>Streaming Window Metrics Aggregator</h2>
+    <nav class="nav" aria-label="Page sections">
+      <a href="#technical">Technical feasibility</a>
+      <a href="#technology">Technology components</a>
+      <a href="#economic">Economic feasibility</a>
+      <a href="#operational">Operational feasibility</a>
+      <a href="#schedule">Schedule feasibility</a>
+      <a href="#risk">Risk feasibility</a>
+      <a href="#conclusion">Conclusion</a>
+    </nav>
+  </aside>
+
+  <main class="content">
+    <header class="hero">
+      <div class="eyebrow">Project feasibility study</div>
+      <h1>Streaming Window Metrics Aggregator</h1>
+      <p>Integrated with a Library Management System</p>
+      <span class="hero-chip">Real-time event processing · Window-based analytics</span>
+    </header>
+
+    <section class="card" id="technical">
+      <div class="section-head"><span class="number">01</span><h2>Technical Feasibility</h2></div>
+      <p class="lead">The project is technically feasible using Python, a cloud message broker, Redis, FastAPI, and web technologies.</p>
+      <p>The Library Management System generates events whenever a book is issued, returned, or reserved. These events are transmitted through either CloudAMQP (RabbitMQ) or AWS Kinesis Data Streams to the Python stream processor.</p>
+      <p>The processor implements tumbling and sliding windows to calculate metrics. Redis stores the aggregated results, which are retrieved through FastAPI and displayed on a real-time dashboard.</p>
+      <p>The required technologies and development tools are available for implementation and testing. The project can be implemented using established technologies.</p>
+    </section>
+
+    <section class="card" id="technology">
+      <div class="section-head"><span class="number">↳</span><h2>Technology Components</h2></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Component</th><th>Technology</th><th>Purpose</th></tr></thead>
+          <tbody><tr><td>Event Producer</td><td><span class='tag'>Python</span></td><td>Generates library events</td></tr>
+<tr><td>Cloud Message Broker</td><td><span class='tag'>Hosted RabbitMQ / AWS Kinesis Data Streams</span></td><td>Delivers events to the processor</td></tr>
+<tr><td>Stream Processor</td><td><span class='tag'>Python</span></td><td>Consumes and validates events</td></tr>
+<tr><td>Window Manager</td><td><span class='tag'>Python</span></td><td>Implements tumbling and sliding windows</td></tr>
+<tr><td>Metrics Aggregator</td><td><span class='tag'>Python</span></td><td>Calculates window statistics</td></tr>
+<tr><td>In-Memory Database</td><td><span class='tag'>Redis</span></td><td>Stores aggregated results</td></tr>
+<tr><td>REST API</td><td><span class='tag'>FastAPI</span></td><td>Exposes metrics</td></tr>
+<tr><td>Monitoring Dashboard</td><td><span class='tag'>HTML, CSS, JavaScript</span></td><td>Displays metrics and charts</td></tr>
+<tr><td>Containerization</td><td><span class='tag'>Docker</span></td><td>Runs local application components</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="economic">
+      <div class="section-head"><span class="number">02</span><h2>Economic Feasibility</h2></div>
+      <p class="lead">The project can be developed at a low cost using open-source software and free-tier services where available.</p>
+      <ul class="bullet-list">
+        <li>Python, FastAPI, Redis, and Docker can be used without software licensing costs.</li>
+        <li>CloudAMQP offers a free plan subject to usage limits.</li>
+        <li>AWS Kinesis may incur charges depending on configuration and usage.</li>
+        <li>Development and testing can be performed on an existing computer.</li>
+      </ul>
+      <div class="note">Therefore, the project is economically feasible if cloud usage is monitored and kept within the available budget.</div>
+    </section>
+
+    <section class="card" id="operational">
+      <div class="section-head"><span class="number">03</span><h2>Operational Feasibility</h2></div>
+      <p>The system is designed to operate alongside the Library Management System. It automatically processes library events and updates metrics without requiring manual calculations.</p>
+      <p>The dashboard allows users to monitor book issues, returns, reservations, and event counts over selected time windows. Its web-based interface makes the results easy to understand and access.</p>
+      <p>The system can operate as a monitoring component without replacing the existing library application's core functions.</p>
+    </section>
+
+    <section class="card" id="schedule">
+      <div class="section-head"><span class="number">04</span><h2>Schedule Feasibility</h2></div>
+      <p>The project can be completed within the academic project timeline by dividing development into the following stages:</p>
+      <ol class="stages"><li><span class='step'>01</span><span>Design the system architecture and data flow.</span></li>
+<li><span class='step'>02</span><span>Configure the cloud message broker and Redis.</span></li>
+<li><span class='step'>03</span><span>Implement event consumption and windowing logic.</span></li>
+<li><span class='step'>04</span><span>Develop the aggregation module and REST API.</span></li>
+<li><span class='step'>05</span><span>Build the monitoring dashboard.</span></li>
+<li><span class='step'>06</span><span>Perform functional testing, fault-injection tests, and performance benchmarking.</span></li>
+<li><span class='step'>07</span><span>Document the implementation and results.</span></li></ol>
+      <p>Development can proceed module by module, allowing individual components to be tested before integration.</p>
+    </section>
+
+    <section class="card" id="risk">
+      <div class="section-head"><span class="number">05</span><h2>Risk Feasibility</h2></div>
+      <p>Potential risks and mitigation strategies include:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+          <tbody><tr><td>Broker connection failure</td><td>Implement reconnection and retry logic.</td></tr>
+<tr><td>Duplicate events</td><td>Use unique event IDs and deduplication.</td></tr>
+<tr><td>Processor crash</td><td>Use checkpoints and recover processing state where implemented.</td></tr>
+<tr><td>Redis data loss</td><td>Configure persistence or reconstruct metrics by replaying retained events where supported.</td></tr>
+<tr><td>High event volume</td><td>Measure processing latency and optimize window processing.</td></tr>
+<tr><td>Cloud cost overrun</td><td>Monitor usage and remove unused cloud resources.</td></tr></tbody>
+        </table>
+      </div>
+      <p>These measures can reduce the impact of failures, although complete fault tolerance will depend on the implementation and testing.</p>
+    </section>
+
+    <section class="card conclusion" id="conclusion">
+      <div class="section-head"><span class="number">06</span><h2>Conclusion</h2></div>
+      <p class="lead">The Streaming Window Metrics Aggregator is technically, economically, operationally, and schedule-feasible as an academic project.</p>
+      <p>It combines cloud-based event delivery with real-time window processing and in-memory metric storage to monitor Library Management System activities. Using a modular architecture, suitable testing, and cost controls will support reliable implementation within the project scope.</p>
+    </section>
+    <div class="footer">Streaming Window Metrics Aggregator · Feasibility Study</div>
+  </main>
+</div>
+</body>
+</html>

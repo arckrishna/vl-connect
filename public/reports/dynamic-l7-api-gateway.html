@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic L7 API Gateway & Reverse Proxy</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.35)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.35)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.35)',
+              'glow-amber': '0 0 25px -5px rgba(245, 158, 11, 0.35)',
+              'glow-rose': '0 0 25px -5px rgba(244, 63, 94, 0.35)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.35);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.25);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    <i class="fa-solid fa-shield-halved text-sm"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Dynamic L7 API Gateway &amp; Reverse Proxy
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">System Design</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">A secure, dynamically configurable entry point for microservices</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Gateway Simulator</span>
+                </a>
+
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar TOC (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Hero Header</a>
+                            <a href="#abstract" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Abstract</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Introduction</a>
+                            <a href="#problem-statement" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Problem Statement</a>
+                            <a href="#objectives-scope" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Objectives &amp; Scope</a>
+                            <a href="#proposed-architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Proposed Architecture</a>
+                            <a href="#request-flow" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. Request Processing Flow</a>
+                            <a href="#dynamic-routing" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Dynamic Routing &amp; Hot Reload</a>
+                            <a href="#auth-sec" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Auth, Authz &amp; Secrets</a>
+                            <a href="#network-security" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Network &amp; Security Design</a>
+                            <a href="#reliability-scaling" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Reliability &amp; Failures</a>
+                            <a href="#capacity-perf" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">10. Capacity &amp; Benchmarks</a>
+                            <a href="#observability" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">11. Observability &amp; Ops</a>
+                            <a href="#test-plan" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">12. Test Plan (T01-T12)</a>
+                            <a href="#risks-mitigations" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">13. Risks &amp; Mitigations</a>
+                            <a href="#implementation-plan" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">14. Implementation Plan</a>
+                            <a href="#limitations-assumptions" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">15. Limitations &amp; Scope</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">16. Conclusion &amp; References</a>
+                            <a href="#appendix-a" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Appendix A. BreakScale Topology</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 17. Live Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Project Metadata</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Course / Topic</span>
+                                <span class="text-slate-200 font-semibold">System Design Mini Project (Topic 16)</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Submitted By</span>
+                                <span class="text-slate-200 font-medium block">Rishabh Jha (D12A, 20)</span>
+                                <span class="text-slate-200 font-medium block">Pranav Kule (D12C, 22)</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Faculty Guide</span>
+                                <span class="text-brand-indigo font-semibold">Priya R L</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-1.5 text-slate-300">0. Header &amp; Metadata</a>
+                        <a href="#abstract" class="mobile-toc-link block py-1.5 text-slate-300">1. Abstract</a>
+                        <a href="#introduction" class="mobile-toc-link block py-1.5 text-slate-300">1. Introduction</a>
+                        <a href="#problem-statement" class="mobile-toc-link block py-1.5 text-slate-300">2. Problem Statement</a>
+                        <a href="#objectives-scope" class="mobile-toc-link block py-1.5 text-slate-300">3. Objectives &amp; Scope</a>
+                        <a href="#proposed-architecture" class="mobile-toc-link block py-1.5 text-slate-300">4. Proposed Architecture</a>
+                        <a href="#request-flow" class="mobile-toc-link block py-1.5 text-slate-300">5. Request Flow</a>
+                        <a href="#dynamic-routing" class="mobile-toc-link block py-1.5 text-slate-300">6. Dynamic Hot Reload</a>
+                        <a href="#auth-sec" class="mobile-toc-link block py-1.5 text-slate-300">7. JWT &amp; Secret Manager</a>
+                        <a href="#network-security" class="mobile-toc-link block py-1.5 text-slate-300">8. Network &amp; Security Controls</a>
+                        <a href="#test-plan" class="mobile-toc-link block py-1.5 text-slate-300">12. Test Matrix (T01-T12)</a>
+                        <a href="#appendix-a" class="mobile-toc-link block py-1.5 text-slate-300">Appendix A. Topology</a>
+                        <a href="#simulator" class="mobile-toc-link block py-1.5 text-brand-emerald font-bold">17. Live Gateway Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-server"></i> System Architecture &amp; Design Report
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Layer 7 Reverse Proxy
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Zero-Downtime Hot Reload
+                            </span>
+                        </div>
+
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Dynamic L7 API Gateway &amp; <span class="gradient-text">Reverse Proxy</span>
+                        </h1>
+
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            A secure, dynamically configurable entry point for microservices validating JWT tokens, managing dynamic hot-reload routing tables, and securing private backend networks.
+                        </p>
+
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Course &amp; Topic</span>
+                                <span class="text-white font-bold text-sm block">System Design Mini Project</span>
+                                <span class="text-brand-indigo font-mono">Topic 16: Dynamic L7 Gateway</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Submitted By</span>
+                                <span class="text-white font-semibold block">Rishabh Jha (D12A, 20)</span>
+                                <span class="text-white font-semibold block">Pranav Kule (D12C, 22)</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Faculty Guide</span>
+                                <span class="text-slate-200 block font-semibold">Priya R L</span>
+                                <span class="text-slate-400 block text-[11px]">Department of Computer Engineering</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Gateway Simulator
+                            </a>
+                            <a href="#proposed-architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore Architecture Diagrams
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. ABSTRACT -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Abstract</h2>
+                            <p class="text-xs text-slate-400">Executive summary, design goals, and simulator notes</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            This report presents the system software design for a <strong class="text-white">Dynamic Layer 7 (L7) API Gateway and Reverse Proxy</strong>. The gateway provides one single, secure HTTPS entry point for web, mobile, and external clients. It verifies JSON Web Tokens (JWTs), matches requests against configurable routing rules, forwards valid requests to private User, Product, or Order services, and relays backend responses seamlessly back to clients.
+                        </p>
+                        <p>
+                            Routing configuration is stored outside the gateway so that validated changes can be loaded dynamically in real time without restarting the gateway process. Sensitive values such as signing keys and API credentials are retrieved directly from a cloud Secret Manager. The design also specifies network isolation, connection/read timeouts, controlled error responses, structured logging, and multi-instance active deployments behind a load balancer.
+                        </p>
+                        <p class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300">
+                            <strong class="text-brand-indigo block mb-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Verification Note:</strong>
+                            The architecture diagram describes the intended technical design. The accompanying BreakScale simulator topology represents the main components and connections. A diagram or component label alone does not prove that JWT verification, Redis-backed configuration reload, or runtime path matching is active in the simulator—these behaviors are verified through implementation and structured validation testing.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 1. INTRODUCTION -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Introduction</h2>
+                            <p class="text-xs text-slate-400">Context &amp; advantages of Layer 7 gateways</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            Microservice architectures divide monolithic business capabilities into independent, smaller services. Without a centralized API gateway, client applications must discover and keep track of individual service endpoints, while each backend microservice is forced to duplicate authentication, rate limiting, routing, and error-handling logic. An L7 gateway centralizes these cross-cutting operational responsibilities while allowing backend services to remain decoupled and independently deployable.
+                        </p>
+                        <p>
+                            Unlike a Layer 4 (L4) load balancer—which routes TCP/UDP connections using transport-level IP addresses and ports—an L7 gateway inspects HTTP methods, URL paths, headers, and verified identity claims. Combining this deep inspection capability with reverse proxying and hot-reloadable routing rules allows cloud administrators to modify service destinations on the fly without forcing clients to change their base URL or experience service downtime.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 2. PROBLEM STATEMENT -->
+                <section id="problem-statement" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Problem Statement</h2>
+                            <p class="text-xs text-slate-400">Challenges of directly exposing microservices</p>
+                        </div>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-rose/10 via-brand-violet/10 to-transparent border border-brand-rose/30 space-y-2 mb-4">
+                        <h3 class="text-xs font-bold text-brand-rose uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Architectural Vulnerabilities of Direct Exposure
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            Directly exposing individual backend microservices to public networks introduces severe security vulnerabilities, code duplication, fragile deployments, and poor operational visibility.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-shield-cat text-brand-rose mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Larger Attack Surface</strong> Exposed backend services can be targeted directly from public networks.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-copy text-brand-amber mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Duplicated Authentication</strong> Every service repeats JWT verification and identity checking logic.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-arrows-rotate text-brand-violet mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Rigid Routing &amp; Restarts</strong> Changing an endpoint address requires client code updates or service restarts.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-key text-brand-cyan mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Credential Leakage Risk</strong> Hard-coded secrets in config files risk accidental repository exposure.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-hourglass-end text-brand-indigo mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Inconsistent Handling</strong> Slow or dead backends cause unhandled stack traces and varied client errors.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-eye-slash text-brand-emerald mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Fragmented Observability</strong> Independent logs make tracing end-to-end request latencies difficult.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. OBJECTIVES AND SCOPE -->
+                <section id="objectives-scope" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Objectives &amp; Scope</h2>
+                            <p class="text-xs text-slate-400">Core goals and boundary definitions</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">3.1 System Objectives</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O1</span>
+                                <span>Provide a single HTTPS entry point for all client web, mobile, and external applications.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O2</span>
+                                <span>Validate JWT signatures, expiry, and required claims before forwarding protected requests.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O3</span>
+                                <span>Route requests dynamically using URL path prefixes, HTTP methods, and custom headers.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O4</span>
+                                <span>Load validated routing updates on the fly without restarting the gateway process (hot reload).</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O5</span>
+                                <span>Retrieve signing keys and API credentials from a managed Secret Manager.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O6</span>
+                                <span>Keep User, Product, and Order microservices isolated inside a private network segment.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O7</span>
+                                <span>Apply explicit connect/read timeouts and return controlled HTTP failure responses.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="px-1.5 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono font-bold">O8</span>
+                                <span>Support multi-instance gateway deployments behind a load balancer for high availability.</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-800">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">3.2 Scope Boundaries</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-brand-emerald/10 border border-brand-emerald/20 text-slate-200">
+                                    <strong class="text-brand-emerald block mb-1">In Scope</strong>
+                                    HTTPS ingress, JWT verification, path routing, reverse proxying, configuration schema validation &amp; hot reload, secret fetching, structured logging, health checks, timeouts, and standard error handling.
+                                </div>
+                                <div class="p-3 rounded-xl bg-brand-rose/10 border border-brand-rose/20 text-slate-200">
+                                    <strong class="text-brand-rose block mb-1">Out of Scope</strong>
+                                    Token issuance (OAuth2/OIDC identity provider implementation), full user identity management UI, and internet-scale performance tuning beyond academic project scope.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. PROPOSED ARCHITECTURE (INTERACTIVE FIGURES 2 & A1) -->
+                <section id="proposed-architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                                04
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white">4. Proposed System Architecture</h2>
+                                <p class="text-xs text-slate-400">Figures 2 &amp; A1 Preserved — High-Level Architecture &amp; BreakScale Topology</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                            <button class="arch-tab px-3 py-1.5 rounded-lg active font-semibold text-white bg-brand-indigo shadow transition" data-tab="fig2">
+                                Figure 2 (System Design)
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="figA1">
+                                Figure A1 (BreakScale Snapshot)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 relative overflow-x-auto min-h-[440px]">
+                        
+                        <!-- FIGURE 2: HIGH-LEVEL ARCHITECTURE -->
+                        <div id="arch-fig2" class="arch-pane space-y-4">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider">Dynamic L7 API Gateway &amp; Reverse Proxy Architecture</span>
+                                <h3 class="text-base font-bold text-white">Figure 2. High-Level System Architecture Diagram</h3>
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs font-mono">
+                                <!-- Col 1: Client -->
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                                    <div class="font-bold text-white border-b border-slate-800 pb-1 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-users text-brand-indigo"></i> Clients (Public)
+                                    </div>
+                                    <div class="p-2 bg-slate-950 rounded text-slate-300">Web Application</div>
+                                    <div class="p-2 bg-slate-950 rounded text-slate-300">Mobile App</div>
+                                    <div class="p-2 bg-slate-950 rounded text-slate-300">External API Client</div>
+                                    <div class="text-[10px] text-brand-indigo font-bold text-center">HTTPS Request &rarr;</div>
+                                </div>
+
+                                <!-- Col 2 & 3: L7 Gateway Subsystems -->
+                                <div class="md:col-span-2 p-3.5 rounded-xl bg-slate-900 border border-brand-indigo/40 space-y-2">
+                                    <div class="font-bold text-brand-indigo border-b border-slate-800 pb-1 flex items-center justify-between">
+                                        <span>L7 API Gateway (Cloud Compute)</span>
+                                        <span class="text-[10px] bg-brand-indigo/20 px-2 py-0.5 rounded text-brand-indigo">Stateless</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 text-center text-[11px]">
+                                        <div class="p-2 bg-slate-950 rounded border border-brand-rose/40">
+                                            <i class="fa-solid fa-key text-brand-rose block mb-1"></i>
+                                            <span class="font-bold text-white block text-[10px]">JWT Verification</span>
+                                            <span class="text-[9px] text-slate-400 block">Token &amp; Expiry</span>
+                                        </div>
+                                        <div class="p-2 bg-slate-950 rounded border border-brand-amber/40">
+                                            <i class="fa-solid fa-route text-brand-amber block mb-1"></i>
+                                            <span class="font-bold text-white block text-[10px]">Dynamic Router</span>
+                                            <span class="text-[9px] text-slate-400 block">Path Matching</span>
+                                        </div>
+                                        <div class="p-2 bg-slate-950 rounded border border-brand-emerald/40">
+                                            <i class="fa-solid fa-[#10B981] fa-arrow-right-arrow-left text-brand-emerald block mb-1"></i>
+                                            <span class="font-bold text-white block text-[10px]">Reverse Proxy</span>
+                                            <span class="text-[9px] text-slate-400 block">Timeouts &amp; Forwarding</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2 pt-1">
+                                        <div class="p-2 bg-slate-950 rounded border border-slate-800 text-[10px]">
+                                            <span class="text-brand-emerald font-bold block"><i class="fa-solid fa-lock mr-1"></i> Secret Manager</span>
+                                            <span class="text-slate-400 block">JWT Keys &amp; Credentials</span>
+                                        </div>
+                                        <div class="p-2 bg-slate-950 rounded border border-slate-800 text-[10px]">
+                                            <span class="text-brand-violet font-bold block"><i class="fa-solid fa-database mr-1"></i> Config Store (Redis)</span>
+                                            <span class="text-slate-400 block">Dynamic Hot Reload</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Col 4: Private Backend Services -->
+                                <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                                    <div class="font-bold text-brand-emerald border-b border-slate-800 pb-1 flex items-center gap-1.5">
+                                        <i class="fa-solid fa-network-wired text-brand-emerald"></i> Private Network
+                                    </div>
+                                    <div class="p-2 bg-slate-950 rounded border border-slate-800 text-slate-200">
+                                        <span class="font-bold text-white block">User Service</span>
+                                        <span class="text-[9px] text-slate-400">/users/*</span>
+                                    </div>
+                                    <div class="p-2 bg-slate-950 rounded border border-slate-800 text-slate-200">
+                                        <span class="font-bold text-white block">Product Service</span>
+                                        <span class="text-[9px] text-slate-400">/products/*</span>
+                                    </div>
+                                    <div class="p-2 bg-slate-950 rounded border border-slate-800 text-slate-200">
+                                        <span class="font-bold text-white block">Order Service</span>
+                                        <span class="text-[9px] text-slate-400">/orders/*</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- FIGURE A1: BREAKSCALE SNAPSHOT -->
+                        <div id="arch-figA1" class="arch-pane hidden space-y-4">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-amber uppercase tracking-wider">BreakScale Simulation Model</span>
+                                <h3 class="text-base font-bold text-white">Figure A1. Simulator Snapshot &amp; Node Topology</h3>
+                            </div>
+                            
+                            <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3 font-mono text-xs">
+                                <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 text-center text-[11px]">
+                                    <div class="p-2 rounded bg-purple-950/60 border border-purple-800 text-purple-300">
+                                        <div class="font-bold">Client</div>
+                                        <div class="text-[10px] text-slate-400">7.8/s SENT</div>
+                                    </div>
+                                    <div class="p-2 rounded bg-emerald-950/60 border border-emerald-800 text-emerald-300">
+                                        <div class="font-bold">Rate Limiter</div>
+                                        <div class="text-[10px] text-slate-400">100 Tokens</div>
+                                    </div>
+                                    <div class="p-2 rounded bg-blue-950/60 border border-blue-800 text-blue-300">
+                                        <div class="font-bold">Load Balancer</div>
+                                        <div class="text-[10px] text-slate-400">7.8/s SERVED</div>
+                                    </div>
+                                    <div class="p-2 rounded bg-cyan-950/60 border border-cyan-800 text-cyan-300">
+                                        <div class="font-bold">Gateway 1</div>
+                                        <div class="text-[10px] text-slate-400">6.7/s PASSED</div>
+                                    </div>
+                                    <div class="p-2 rounded bg-cyan-950/60 border border-cyan-800 text-slate-500">
+                                        <div class="font-bold">Gateway 2</div>
+                                        <div class="text-[10px]">0/s PASSED</div>
+                                    </div>
+                                </div>
+
+                                <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-slate-300 space-y-1 text-xs">
+                                    <div class="text-brand-amber font-bold">Observed Snapshot Metrics &amp; Topology Behavior:</div>
+                                    <p class="text-slate-400 font-sans">
+                                        Client traffic is ~7.8 req/s; the Load Balancer serves 7.8 req/s. Gateway 1 handles 6.7 req/s passed, while Gateway 2 reports 0 req/s in this run instance. The client panel indicates ~13% failing requests due to upstream rate limiters and unconfigured route errors.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Component Responsibility Table -->
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Component</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Responsibility</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Key Design Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                <tr>
+                                    <td class="px-4 py-2.5 font-bold text-white">Client</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Sends HTTPS requests to gateway.</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Web, mobile, or external client; no direct backend access.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-bold text-brand-emerald">Rate Limiter</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Controls request volume.</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Token bucket policy per IP/Token; returns HTTP 429.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-bold text-brand-indigo">Load Balancer</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Distributes traffic to healthy instances.</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">L4/L7 active health checks with round-robin or least-conn policy.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-bold text-brand-violet">L7 API Gateway</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Coordinates auth, routing, and proxying.</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Stateless execution engine for horizontal pod scaling.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-bold text-brand-rose">JWT Verification</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Validates signatures and claims.</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Rejects missing, expired, or tampered tokens before routing.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-bold text-brand-amber">Dynamic Router</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Matches path/method to backend service.</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Atomic memory reference swaps on hot reload.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-bold text-brand-cyan">Reverse Proxy</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Forwards requests &amp; relays responses.</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Sets connect/read timeouts and correlation headers.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 5. REQUEST PROCESSING FLOW -->
+                <section id="request-flow" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. Request Processing Flow</h2>
+                            <p class="text-xs text-slate-400">9-step end-to-end request lifecycle</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3 font-mono text-xs">
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">1</span>
+                            <span>Client sends HTTPS request to the public gateway endpoint.</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">2</span>
+                            <span>Rate limiter evaluates request volume against bucket policy (rejects 429 if exceeded).</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">3</span>
+                            <span>Load balancer selects a healthy gateway instance (Gateway 1 or Gateway 2).</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">4</span>
+                            <span>Gateway extracts Bearer token from <code class="text-brand-cyan">Authorization: Bearer &lt;JWT&gt;</code> header.</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">5</span>
+                            <span>JWT module validates token signature using Secret Manager key, checks expiry and claims.</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">6</span>
+                            <span>Dynamic router matches HTTP method and URL path prefix against active routing table.</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">7</span>
+                            <span>Reverse proxy forwards request to private backend with timeouts and correlation ID.</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center">8</span>
+                            <span>Backend service processes request and returns HTTP response to reverse proxy.</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 flex items-center gap-3">
+                            <span class="w-6 h-6 rounded-full bg-brand-emerald/20 text-brand-emerald font-bold flex items-center justify-center">9</span>
+                            <span>Gateway relays response to client and logs metadata (Latency, Status, Route ID).</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. DYNAMIC ROUTING AND CONFIGURATION RELOAD -->
+                <section id="dynamic-routing" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. Dynamic Routing &amp; Hot Reload Protocol</h2>
+                            <p class="text-xs text-slate-400">Zero-downtime routing updates and schema validation</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            The initial routing table maps incoming request path prefixes to private backend microservices:
+                        </p>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Path Pattern</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Destination Service</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Example Request</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">/users/*</td>
+                                        <td class="px-4 py-2.5 text-slate-300">User Service</td>
+                                        <td class="px-4 py-2.5 text-slate-400">GET /users/42</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-violet font-bold">/products/*</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Product Service</td>
+                                        <td class="px-4 py-2.5 text-slate-400">GET /products/123</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-emerald font-bold">/orders/*</td>
+                                        <td class="px-4 py-2.5 text-slate-300">Order Service</td>
+                                        <td class="px-4 py-2.5 text-slate-400">POST /orders</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+                            <strong class="text-brand-violet block font-mono">Atomic Hot-Reload Protocol:</strong>
+                            <ol class="list-decimal list-inside text-slate-400 space-y-1 font-sans">
+                                <li>Administrator pushes route update to Redis/Config Store.</li>
+                                <li>Gateway instances receive publication event or fetch updated JSON configuration schema.</li>
+                                <li>Gateway parses configuration and validates destinations against an allowable subnet whitelist.</li>
+                                <li>If schema validation succeeds, gateway constructs a new routing table object and atomically swaps the active pointer.</li>
+                                <li>If validation fails, the candidate config is rejected and the last-known-good (LKG) table remains active.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. AUTHENTICATION AND SECRET MANAGEMENT -->
+                <section id="auth-sec" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Auth, Authz &amp; Secret Management</h2>
+                            <p class="text-xs text-slate-400">JWT verification rules and cloud Secret Manager integration</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                            <div class="text-brand-rose font-bold">7.1 JWT Verification Rules</div>
+                            <ul class="list-disc list-inside text-slate-400 space-y-1 font-sans">
+                                <li>Accept tokens exclusively via <code class="text-brand-cyan">Authorization: Bearer &lt;JWT&gt;</code> header.</li>
+                                <li>Verify signature using trusted Secret Manager public keys and explicitly allowed algorithms (RS256/HS256). Reject <code class="text-brand-rose">alg: "none"</code>.</li>
+                                <li>Validate expiration (<code class="text-brand-amber">exp</code>), Not Before (<code class="text-brand-amber">nbf</code>), Issuer (<code class="text-brand-amber">iss</code>), and Audience (<code class="text-brand-amber">aud</code>).</li>
+                                <li>Return HTTP 401 Unauthorized for missing/expired tokens; return HTTP 403 Forbidden for missing permissions.</li>
+                            </ul>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                            <div class="text-brand-emerald font-bold">7.2 Secret Manager Integration</div>
+                            <ul class="list-disc list-inside text-slate-400 space-y-1 font-sans">
+                                <li>Retrieve signing keys, API credentials, and internal TLS certificates dynamically from cloud Secret Manager.</li>
+                                <li>Apply least-privilege IAM roles to gateway instances.</li>
+                                <li>Cache secrets in local gateway memory with TTL refresh policy; redact secrets from logs.</li>
+                                <li>Fail closed if Secret Manager is unreachable and cache is stale.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. NETWORK AND SECURITY DESIGN -->
+                <section id="network-security" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Network &amp; Security Controls</h2>
+                            <p class="text-xs text-slate-400">Security matrix and boundary enforcement</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Security Concern</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Architectural Control</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Client-to-Gateway Traffic</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Enforce HTTPS/TLS 1.3; redirect or drop HTTP plain traffic.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Backend Exposure Isolation</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Place services in private subnets; allow ingress only from gateway security groups.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Administrative Access</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Require MFA, RBAC permissions, and audit log all configuration updates.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Configuration Tampering</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Validate JSON schema, enforce destination allow-lists, and keep last-known-good backup.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 font-semibold text-white">Sensitive Header Sanitization</td>
+                                    <td class="px-4 py-2.5 text-slate-300">Strip incoming untrusted identity headers (e.g. <code class="text-brand-cyan">X-User-ID</code>) before proxying.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 9. RELIABILITY AND FAILURE HANDLING -->
+                <section id="reliability-scaling" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Reliability, Scalability &amp; Failure Matrix</h2>
+                            <p class="text-xs text-slate-400">Fault tolerance behaviors across 10 failure scenarios</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Failure Scenario</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Expected Gateway Response</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono text-[11px]">
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-rose font-bold">Invalid JWT</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Return HTTP 401 Unauthorized; do not forward request.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-rose font-bold">Authenticated but Unauthorized</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Return HTTP 403 Forbidden; block backend access.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-amber font-bold">No Route Match</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Return HTTP 404 Not Found or custom gateway routing error.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-amber font-bold">Backend Unavailable</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Return HTTP 503 Service Unavailable; keep gateway instance healthy.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-amber font-bold">Backend Slow / Unresponsive</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Enforce read/connect timeout (e.g. 2s); return HTTP 504 Gateway Timeout.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-violet font-bold">Invalid Route Configuration</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Reject candidate schema update; retain last-known-good (LKG) table.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-violet font-bold">Config Store Unavailable</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Continue operating on in-memory routing table; trigger alert.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-indigo font-bold">Secret Manager Down</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Use cached secrets within TTL policy; fail closed if cache expires.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 text-brand-indigo font-bold">Gateway Instance Crash</td>
+                                    <td class="px-4 py-2 font-sans text-slate-300">Load balancer health check removes dead pod; traffic shifts seamlessly to healthy instances.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 10. CAPACITY AND PERFORMANCE CONSIDERATIONS -->
+                <section id="capacity-perf" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            10
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">10. Capacity &amp; Performance Evaluation</h2>
+                            <p class="text-xs text-slate-400">Analysis of BreakScale simulation metrics</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            The BreakScale simulator snapshot records ~7.8 requests/second sent by clients and ~7.8 requests/second served by the load balancer. Gateway 1 handles 6.7 requests/second passed while Gateway 2 records zero passed requests during that specific snapshot window. The client panel also reports a ~13% failure rate.
+                        </p>
+                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 space-y-2">
+                            <strong class="text-brand-indigo block font-mono">Performance Investigation Steps:</strong>
+                            <ul class="list-disc list-inside space-y-1 font-sans">
+                                <li>Inspect load balancer algorithm (Verify if round-robin vs sticky sessions caused Gateway 2 starvation).</li>
+                                <li>Verify Gateway 2 readiness probe health status in simulator runtime.</li>
+                                <li>Benchmark throughput, P50/P95/P99 latency percentiles, error rate, and queue depths under gradual load escalation.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 11. OBSERVABILITY AND OPERATIONS -->
+                <section id="observability" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            11
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">11. Observability &amp; Operations</h2>
+                            <p class="text-xs text-slate-400">Correlation tracking, health checks, and alerting</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono">
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Correlation ID</span>
+                            <span class="text-slate-400">Inject <code class="text-brand-cyan">X-Correlation-ID</code> header at ingress and propagate across all microservices.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-emerald font-bold block">Health Checks</span>
+                            <span class="text-slate-400">Expose <code class="text-brand-emerald">/healthz</code> (liveness) and <code class="text-brand-emerald">/readyz</code> (readiness) endpoints for load balancers.</span>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-amber font-bold block">Metrics &amp; Alerts</span>
+                            <span class="text-slate-400">Monitor 5xx error spikes, route reload failures, P99 latency, and gateway memory pool.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 12. FUNCTIONAL AND FAILURE TEST PLAN (T01 - T12) -->
+                <section id="test-plan" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            12
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">12. Functional &amp; Failure Test Plan</h2>
+                            <p class="text-xs text-slate-400">System validation test suite (T01 to T12)</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800 w-16">ID</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Test Execution Description</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Expected Result</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-indigo font-bold">T01</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">GET /products/123 with valid JWT</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Request reaches Product Service; 200 OK relayed.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-indigo font-bold">T02</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Requests under /users/* and /orders/*</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Routed to User Service and Order Service respectively.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-rose font-bold">T03</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Missing, malformed, expired JWT</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">HTTP 401 Unauthorized; request not forwarded.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-rose font-bold">T04</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Valid identity without permission</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">HTTP 403 Forbidden returned by gateway.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-violet font-bold">T05</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Add or modify dynamic route</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">New rule activates without gateway process restart.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-violet font-bold">T06</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Submit malformed route schema</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Update rejected; last-known-good configuration retained.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-amber font-bold">T07</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Make Config Store unavailable</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Gateway serves requests using cached in-memory routes.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-amber font-bold">T08</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Stop or delay Product Service</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Returns 503/504; User and Order routes unaffected.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-emerald font-bold">T09</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Stop Gateway 1 instance</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Load balancer directs 100% traffic to Gateway 2.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-emerald font-bold">T10</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Direct public connection to backend</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Network policy blocks request completely.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-cyan font-bold">T11</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Load test with traffic ramp-up</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Collect throughput, latency P95/P99, error rates.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2.5 text-brand-cyan font-bold">T12</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-300">Inspect logs for tokens/secrets</td>
+                                    <td class="px-4 py-2.5 font-sans text-slate-400">Zero plain Bearer tokens or secret keys exposed in logs.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 13. RISKS AND MITIGATIONS -->
+                <section id="risks-mitigations" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            13
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">13. Risks &amp; Risk Mitigations</h2>
+                            <p class="text-xs text-slate-400">Risk register and architectural countermeasures</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-amber font-bold block">Invalid Route Config Push</span>
+                            <span class="text-slate-400 font-sans">Mitigation: Enforce JSON schema validation, destination subnet allow-listing, and atomic LKG fallback.</span>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-rose font-bold block">Secret Manager Outage</span>
+                            <span class="text-slate-400 font-sans">Mitigation: In-memory key caching with strict TTL decay; fail closed if cache expires.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 14. IMPLEMENTATION PLAN (PHASES 1 - 10) -->
+                <section id="implementation-plan" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            14
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">14. Implementation Roadmap (Phases 1-10)</h2>
+                            <p class="text-xs text-slate-400">Project delivery milestones and key deliverables</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs font-mono">
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Phase 1</span>
+                            <span class="text-slate-400 font-sans">Requirements &amp; Architecture</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Phase 2</span>
+                            <span class="text-slate-400 font-sans">Cloud &amp; Network Infra</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Phase 3</span>
+                            <span class="text-slate-400 font-sans">Mock Services</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Phase 4</span>
+                            <span class="text-slate-400 font-sans">Proxy &amp; Static Routes</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-indigo font-bold block">Phase 5</span>
+                            <span class="text-slate-400 font-sans">JWT Auth &amp; RBAC</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-violet font-bold block">Phase 6</span>
+                            <span class="text-slate-400 font-sans">Secret Manager Integration</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-violet font-bold block">Phase 7</span>
+                            <span class="text-slate-400 font-sans">Dynamic Hot Reload</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-violet font-bold block">Phase 8</span>
+                            <span class="text-slate-400 font-sans">Timeouts &amp; Multi-Instance</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-emerald font-bold block">Phase 9</span>
+                            <span class="text-slate-400 font-sans">Functional &amp; Load Testing</span>
+                        </div>
+                        <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-brand-emerald font-bold block">Phase 10</span>
+                            <span class="text-slate-400 font-sans">Documentation &amp; Demo</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 15. LIMITATIONS AND ASSUMPTIONS -->
+                <section id="limitations-assumptions" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            15
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">15. Limitations &amp; Assumptions</h2>
+                            <p class="text-xs text-slate-400">Boundary assumptions and simulation scope</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                            <span class="text-brand-cyan font-bold block">Assumptions</span>
+                            <span class="text-slate-400 font-sans">Cloud credits available for deployment; backend services implemented as lightweight microservices; identity provider issues test JWTs.</span>
+                        </div>
+                        <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                            <span class="text-brand-amber font-bold block">Limitations</span>
+                            <span class="text-slate-400 font-sans">Simulator models topological design; full production readiness requires formal automated load test validation and cloud deployment security audits.</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 16. CONCLUSION AND REFERENCES -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            16
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">16. Conclusion &amp; References</h2>
+                            <p class="text-xs text-slate-400">Final engineering summary and standards bibliography</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The <strong class="text-white">Dynamic L7 API Gateway and Reverse Proxy</strong> design provides a comprehensive system architecture for centralizing client request ingress, JWT authentication, route matching, reverse proxying, cloud secret retrieval, and failure recovery across private User, Product, and Order microservices. Externalized route configuration paired with atomic schema validation and zero-downtime hot reload distinguishes this system software design from static reverse proxies.
+                        </p>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-800 space-y-2 text-xs font-mono text-slate-400">
+                        <strong class="text-brand-indigo block uppercase">References:</strong>
+                        <div>• Jones, M., Bradley, J., &amp; Sakimura, N. (2015). JSON Web Token (JWT). RFC 7519, IETF.</div>
+                        <div>• Fielding, R., et al. HTTP Semantics. RFC 9110, IETF.</div>
+                        <div>• Newman, S. (2021). Building Microservices (2nd ed.). O'Reilly Media.</div>
+                        <div>• Richardson, C. (2018). Microservices Patterns. Manning Publications.</div>
+                    </div>
+                </section>
+
+                <!-- APPENDIX A. BREAKSCALE TOPOLOGY SNAPSHOT -->
+                <section id="appendix-a" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            A
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Appendix A. BreakScale Topology Snapshot</h2>
+                            <p class="text-xs text-slate-400">Original simulator capture and load balance metrics</p>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-3 font-mono text-xs text-slate-300">
+                        <div class="text-brand-amber font-bold">Figure A1. BreakScale Topology Capture Data:</div>
+                        <p class="text-slate-400 font-sans">
+                            Client rate: 7.8/s SENT (13% FAILING); Load Balancer rate: 7.8/s SERVED (124ms P99); Gateway 1 rate: 6.7/s PASSED; Gateway 2 rate: 0/s PASSED. Config Store (Redis): 0% HIT. User Service P99: 93ms; Product Service P99: 58ms; Order Service P99: 0ms.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 17. LIVE INTERACTIVE GATEWAY SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Live L7 Gateway &amp; Reverse Proxy Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Send HTTP requests, test JWT validation, trigger hot-reload route updates &amp; failure modes</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simToggleGw2" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-power-off text-brand-amber mr-1"></i> Toggle Gateway 2
+                            </button>
+                            <button id="simToggleBackend" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-server text-brand-rose mr-1"></i> Toggle Product Service
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-indigo mr-1"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Request Control Bar -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+                            <div class="sm:col-span-3">
+                                <label class="block text-slate-400 mb-1 font-semibold">HTTP Method &amp; Path</label>
+                                <select id="simPathSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="GET /products/123">GET /products/123</option>
+                                    <option value="GET /users/42">GET /users/42</option>
+                                    <option value="POST /orders">POST /orders</option>
+                                    <option value="GET /analytics/sales">GET /analytics/sales (Hot-Reload Test)</option>
+                                </select>
+                            </div>
+
+                            <div class="sm:col-span-4">
+                                <label class="block text-slate-400 mb-1 font-semibold">JWT Authentication State</label>
+                                <select id="simJwtSelect" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="VALID">Valid JWT Token (Bearer eyJhbG...)</option>
+                                    <option value="EXPIRED">Expired JWT Token (HTTP 401)</option>
+                                    <option value="MISSING">Missing Auth Header (HTTP 401)</option>
+                                    <option value="FORBIDDEN">Valid Token / Insufficient Role (HTTP 403)</option>
+                                </select>
+                            </div>
+
+                            <div class="sm:col-span-5 flex items-end gap-2">
+                                <button id="btnSendRequest" class="w-full py-2 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet hover:opacity-90 text-white font-bold text-xs transition shadow-glow-indigo">
+                                    <i class="fa-solid fa-paper-plane mr-1"></i> Send Request
+                                </button>
+                                <button id="btnHotReload" class="w-full py-2 rounded-lg bg-brand-emerald/80 hover:bg-brand-emerald text-white font-bold text-xs transition">
+                                    <i class="fa-solid fa-arrows-rotate mr-1"></i> Hot-Reload Routes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Live Dashboard -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Total Requests</span>
+                            <div id="simMetricTotal" class="text-lg font-bold text-brand-indigo">0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">200 OK Passed</span>
+                            <div id="simMetricPassed" class="text-lg font-bold text-brand-emerald">0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">401/403 Denied</span>
+                            <div id="simMetricDenied" class="text-lg font-bold text-brand-rose">0</div>
+                        </div>
+                        <div class="p-3 rounded-2xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                            <span class="text-[10px] text-slate-400 uppercase font-sans">Gateway 1 / 2 Balance</span>
+                            <div id="simMetricBalance" class="text-sm font-bold text-brand-cyan">0 / 0</div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Execution Log & Routing State -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                        
+                        <!-- Panel 1: Dynamic Active Routing Table -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-white font-bold flex items-center gap-2">
+                                    <i class="fa-solid fa-database text-brand-violet"></i> Active Routing Table (Redis Hot-Reloaded)
+                                </span>
+                                <span id="simRouteVersion" class="text-[10px] px-2 py-0.5 rounded bg-brand-violet/20 text-brand-violet">v1.0.0</span>
+                            </div>
+                            <div id="simRouteTable" class="space-y-1.5 min-h-[160px] max-h-[220px] overflow-y-auto">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Real-Time Execution Console -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-slate-400 font-bold flex items-center gap-2">
+                                    <i class="fa-solid fa-terminal text-brand-emerald"></i> Gateway Pipeline Console &amp; Read Trace
+                                </span>
+                                <span class="text-[10px] text-slate-500">Live Proxy</span>
+                            </div>
+                            <div id="simConsole" class="min-h-[160px] max-h-[220px] overflow-y-auto space-y-1 text-slate-300">
+                                <div class="text-slate-500 italic">Simulator initialized. Select request params and click 'Send Request'...</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">G</div>
+                <span class="text-slate-300 font-semibold">Dynamic L7 API Gateway &amp; Reverse Proxy</span>
+            </div>
+            <div class="text-slate-400">
+                Submitted by: Rishabh Jha (20) &amp; Pranav Kule (22) | Guide: Mrs. Priya R L
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: SIMULATOR & INTERACTIVE UI -->
+    <script>
+        // Reading progress & scrollspy
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) current = sec.getAttribute('id');
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // Mobile TOC
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // Architecture Tabs
+        document.querySelectorAll('.arch-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.arch-tab').forEach(b => {
+                    b.classList.remove('active', 'bg-brand-indigo', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('active', 'bg-brand-indigo', 'text-white');
+                btn.classList.remove('text-slate-400');
+
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.arch-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById('arch-' + tab).classList.remove('hidden');
+            });
+        });
+
+        // Search Box
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            if (val.length > 0) clearSearch.classList.remove('hidden');
+            else clearSearch.classList.add('hidden');
+        });
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // Dynamic Gateway Simulator Engine
+        class GatewaySimulator {
+            constructor() {
+                this.routes = [
+                    { path: '/users/*', dest: 'User Service (http://10.0.1.20:8080)' },
+                    { path: '/products/*', dest: 'Product Service (http://10.0.1.30:8080)' },
+                    { path: '/orders/*', dest: 'Order Service (http://10.0.1.40:8080)' }
+                ];
+                this.routeVersion = 1;
+                this.gateway2Active = true;
+                this.productServiceActive = true;
+                this.lbToggle = 0; // 0 for Gw1, 1 for Gw2
+
+                this.totalReqs = 0;
+                this.passedReqs = 0;
+                this.deniedReqs = 0;
+                this.gw1Count = 0;
+                this.gw2Count = 0;
+                this.consoleLogs = [];
+
+                this.renderUI();
+            }
+
+            logConsole(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let colorClass = 'text-slate-300';
+                if (type === 'success') colorClass = 'text-brand-emerald font-semibold';
+                if (type === 'warn') colorClass = 'text-brand-amber';
+                if (type === 'error') colorClass = 'text-brand-rose';
+                if (type === 'step') colorClass = 'text-brand-indigo font-mono';
+
+                this.consoleLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.consoleLogs.length > 25) this.consoleLogs.pop();
+                document.getElementById('simConsole').innerHTML = this.consoleLogs.join('');
+            }
+
+            sendRequest(requestStr, jwtState) {
+                this.totalReqs++;
+                const reqId = 'req-' + Math.random().toString(16).substring(2, 8);
+                const [method, path] = requestStr.split(' ');
+
+                this.logConsole(`--- INGRESS [${reqId}] ${method} ${path} ---`, 'step');
+
+                // Step 1: Rate Limiter
+                this.logConsole(`[RateLimiter] Token bucket check OK (99 tokens remaining).`, 'info');
+
+                // Step 2: Load Balancer Selection
+                let selectedGw = 'Gateway 1';
+                if (this.gateway2Active) {
+                    selectedGw = this.lbToggle === 0 ? 'Gateway 1' : 'Gateway 2';
+                    this.lbToggle = 1 - this.lbToggle;
+                }
+                if (selectedGw === 'Gateway 1') this.gw1Count++;
+                else this.gw2Count++;
+                this.logConsole(`[LoadBalancer] Assigned to ${selectedGw}`, 'info');
+
+                // Step 3: JWT Verification
+                if (jwtState === 'MISSING') {
+                    this.deniedReqs++;
+                    this.logConsole(`[JWT Module] HTTP 401 Unauthorized - Missing Authorization header`, 'error');
+                    this.renderUI();
+                    return;
+                }
+                if (jwtState === 'EXPIRED') {
+                    this.deniedReqs++;
+                    this.logConsole(`[JWT Module] HTTP 401 Unauthorized - Token expired (exp < now)`, 'error');
+                    this.renderUI();
+                    return;
+                }
+                if (jwtState === 'FORBIDDEN') {
+                    this.deniedReqs++;
+                    this.logConsole(`[JWT Module] HTTP 403 Forbidden - Insufficient scope claim`, 'warn');
+                    this.renderUI();
+                    return;
+                }
+                this.logConsole(`[JWT Module] Token verified successfully via Secret Manager key.`, 'success');
+
+                // Step 4: Dynamic Path Match
+                const matchedRoute = this.routes.find(r => {
+                    const prefix = r.path.replace('/*', '');
+                    return path.startsWith(prefix);
+                });
+
+                if (!matchedRoute) {
+                    this.deniedReqs++;
+                    this.logConsole(`[Dynamic Router] HTTP 404 Not Found - No dynamic route matched for ${path}`, 'warn');
+                    this.renderUI();
+                    return;
+                }
+                this.logConsole(`[Dynamic Router] Route matched: ${matchedRoute.path} &rarr; ${matchedRoute.dest}`, 'step');
+
+                // Step 5: Reverse Proxy Forwarding
+                if (matchedRoute.path.startsWith('/products') && !this.productServiceActive) {
+                    this.deniedReqs++;
+                    this.logConsole(`[Reverse Proxy] HTTP 503 Service Unavailable - Upstream Product Service down`, 'error');
+                    this.renderUI();
+                    return;
+                }
+
+                this.passedReqs++;
+                this.logConsole(`[Reverse Proxy] 200 OK Relayed from ${matchedRoute.dest} (Latency: 14ms)`, 'success');
+                this.renderUI();
+            }
+
+            hotReload() {
+                this.routeVersion++;
+                if (!this.routes.some(r => r.path === '/analytics/*')) {
+                    this.routes.push({ path: '/analytics/*', dest: 'Analytics Engine (http://10.0.1.50:8080)' });
+                    this.logConsole(`HOT RELOAD v${this.routeVersion} &rarr; Added /analytics/* route dynamically without restarting!`, 'success');
+                } else {
+                    this.logConsole(`HOT RELOAD v${this.routeVersion} &rarr; Re-validated JSON schema & atomic swap completed.`, 'info');
+                }
+                this.renderUI();
+            }
+
+            toggleGw2() {
+                this.gateway2Active = !this.gateway2Active;
+                this.logConsole(`TOPOLOGY CHANGE &rarr; Gateway 2 is now ${this.gateway2Active ? 'ONLINE' : 'OFFLINE (Drained)'}`, 'warn');
+                this.renderUI();
+            }
+
+            toggleBackend() {
+                this.productServiceActive = !this.productServiceActive;
+                this.logConsole(`SERVICE FAULT &rarr; Product Service is now ${this.productServiceActive ? 'ONLINE' : 'DOWN (Simulating 503)'}`, 'error');
+                this.renderUI();
+            }
+
+            reset() {
+                this.routes = [
+                    { path: '/users/*', dest: 'User Service (http://10.0.1.20:8080)' },
+                    { path: '/products/*', dest: 'Product Service (http://10.0.1.30:8080)' },
+                    { path: '/orders/*', dest: 'Order Service (http://10.0.1.40:8080)' }
+                ];
+                this.routeVersion = 1;
+                this.gateway2Active = true;
+                this.productServiceActive = true;
+                this.totalReqs = 0;
+                this.passedReqs = 0;
+                this.deniedReqs = 0;
+                this.gw1Count = 0;
+                this.gw2Count = 0;
+                this.consoleLogs = [];
+                this.logConsole('Simulator reset to initial baseline state.', 'info');
+                this.renderUI();
+            }
+
+            renderUI() {
+                document.getElementById('simMetricTotal').innerText = this.totalReqs;
+                document.getElementById('simMetricPassed').innerText = this.passedReqs;
+                document.getElementById('simMetricDenied').innerText = this.deniedReqs;
+                document.getElementById('simMetricBalance').innerText = `${this.gw1Count} / ${this.gw2Count}`;
+                document.getElementById('simRouteVersion').innerText = `v1.${this.routeVersion}.0`;
+
+                const tableContainer = document.getElementById('simRouteTable');
+                tableContainer.innerHTML = this.routes.map(r => `
+                    <div class="p-2 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                        <span class="text-brand-indigo font-bold">${r.path}</span>
+                        <span class="text-[10px] text-slate-400 font-sans">${r.dest}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        const sim = new GatewaySimulator();
+
+        document.getElementById('btnSendRequest').addEventListener('click', () => {
+            const p = document.getElementById('simPathSelect').value;
+            const j = document.getElementById('simJwtSelect').value;
+            sim.sendRequest(p, j);
+        });
+
+        document.getElementById('btnHotReload').addEventListener('click', () => sim.hotReload());
+        document.getElementById('simToggleGw2').addEventListener('click', () => sim.toggleGw2());
+        document.getElementById('simToggleBackend').addEventListener('click', () => sim.toggleBackend());
+        document.getElementById('simReset').addEventListener('click', () => sim.reset());
+    </script>
+</body>
+</html>

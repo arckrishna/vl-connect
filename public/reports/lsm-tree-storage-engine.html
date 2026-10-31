@@ -1,0 +1,1558 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSM-Tree Storage Engine over Object Storage</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.3)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      /* Custom Scrollbar & Aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .gradient-text-emerald {
+        background: linear-gradient(135deg, #6EE7B7 0%, #10B981 50%, #06B6D4 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      /* Glow Effects */
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      /* Code block custom styles */
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+      
+      .search-highlight {
+        background-color: rgba(245, 158, 11, 0.35);
+        color: #FDE68A;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    L
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        LSM-Tree Storage Engine
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">Object Store</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Engineering Paper & Interactive Architecture</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Simulator Jump Button -->
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Live Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Overview & Header</a>
+                            <a href="#abstract" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Abstract</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Introduction & Objectives</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. System Architecture</a>
+                            <a href="#engine-core" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Storage Engine Core Deep Dive</a>
+                            <a href="#data-flow" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. Data Flow & Reliability</a>
+                            <a href="#tech-stack" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Technology Stack</a>
+                            <a href="#advantages-scope" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Advantages & Scope</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Conclusion</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 9. Engine Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Author Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Publication Info</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Faculty Advisor</span>
+                                <span class="text-slate-200 font-semibold">Priya R L</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Engineering Team</span>
+                                <span class="text-slate-200 font-medium block">Bhagyashri Joshi</span>
+                                <span class="text-slate-200 font-medium block">Neha Karkhanis</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Domain: Databases / Cloud</span>
+                                <span class="text-brand-indigo font-mono">S3/LSM</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">0. Header & Authors</a>
+                        <a href="#abstract" class="mobile-toc-link block py-2 text-slate-300">1. Abstract</a>
+                        <a href="#introduction" class="mobile-toc-link block py-2 text-slate-300">2. Introduction & Objectives</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">3. System Architecture</a>
+                        <a href="#engine-core" class="mobile-toc-link block py-2 text-slate-300">4. Storage Engine Core</a>
+                        <a href="#data-flow" class="mobile-toc-link block py-2 text-slate-300">5. Data Flow & Reliability</a>
+                        <a href="#tech-stack" class="mobile-toc-link block py-2 text-slate-300">6. Tech Stack</a>
+                        <a href="#advantages-scope" class="mobile-toc-link block py-2 text-slate-300">7. Advantages & Scope</a>
+                        <a href="#conclusion" class="mobile-toc-link block py-2 text-slate-300">8. Conclusion</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">9. Interactive Engine Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-microchip"></i> System Architecture Report
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                S3-Compatible Storage
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                LSM-Tree Data Layer
+                            </span>
+                        </div>
+
+                        <!-- Paper Title -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            LSM-Tree Storage Engine over <span class="gradient-text">Object Storage</span>
+                        </h1>
+
+                        <!-- Subtitle / Meta Summary -->
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            A high-throughput, key-value storage engine architecture bridging write-intensive Log-Structured Merge-Trees with durable, cloud-native object stores (AWS S3, Backblaze B2, Ceph).
+                        </p>
+
+                        <!-- Authors & Details Grid -->
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Faculty Guide</span>
+                                <span class="text-white font-bold text-sm">Priya R L</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Authors / Engineers</span>
+                                <span class="text-white font-semibold">Bhagyashri Joshi</span>
+                                <span class="text-slate-400 mx-1">•</span>
+                                <span class="text-white font-semibold">Neha Karkhanis</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Key Highlights</span>
+                                <span class="text-slate-300">WAL • Memtable • SSTables • Bloom Filters • Manifest</span>
+                            </div>
+                        </div>
+
+                        <!-- Hero Action Controls -->
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Live Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore Architecture Diagrams
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. ABSTRACT -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Abstract</h2>
+                            <p class="text-xs text-slate-400">Core executive summary & system goals</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            Modern applications generate large amounts of data that must be stored reliably and cost-effectively. Object storage systems provide durable and scalable storage for large files and data objects, but they are not designed to behave like traditional databases that support frequent small updates, low-latency reads, and efficient range queries. Directly storing every database update as an independent object can create high request overhead, inefficient reads, and expensive metadata management.
+                        </p>
+                        <p>
+                            This project proposes an <strong class="text-white">LSM-Tree (Log-Structured Merge-Tree) Storage Engine over Object Storage</strong>. The engine accepts key-value writes, records them in a write-ahead log, and buffers recent updates in memory. When the memory buffer reaches a configured threshold, the engine sorts and flushes the data into immutable, sorted table files called <span class="text-brand-indigo font-mono font-semibold">SSTables</span>. These files are stored in an object-storage backend. Background compaction merges overlapping or older SSTables, removes obsolete versions where safe, and improves read efficiency.
+                        </p>
+                        <p>
+                            The system separates the database engine's logical operations from the underlying storage provider. A storage interface can be implemented over a local filesystem for development and an S3-compatible object store for deployment. An in-memory index, block metadata, Bloom filters, and a manifest help the engine locate data while avoiding unnecessary object reads. The design also considers consistency, crash recovery, object naming, versioning, and the cost of object-store requests.
+                        </p>
+                        <p>
+                            The primary objective is to demonstrate how an LSM-Tree can provide database-like key-value operations while using object storage as the durable data layer. The project is intended as an educational prototype; production deployment would require further work on concurrency, distributed coordination, durability guarantees, observability, and failure recovery.
+                        </p>
+                    </div>
+
+                    <!-- Highlight Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+                        <div class="glass-card p-4 rounded-2xl border-brand-indigo/30">
+                            <div class="text-brand-indigo text-lg mb-1"><i class="fa-solid fa-bolt"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Batched Write Path</h4>
+                            <p class="text-[11px] text-slate-400">Converts random key-value updates into sequential memory buffers and immutable flushed SSTables.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-violet/30">
+                            <div class="text-brand-violet text-lg mb-1"><i class="fa-solid fa-filter"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Minimized Requests</h4>
+                            <p class="text-[11px] text-slate-400">Uses Bloom filters and block range indexes to eliminate expensive remote HTTP GET calls.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-emerald/30">
+                            <div class="text-brand-emerald text-lg mb-1"><i class="fa-solid fa-cloud-arrow-up"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">S3 Adapter Layer</h4>
+                            <p class="text-[11px] text-slate-400">Abstracted backend supporting local disk development and S3-compatible cloud storage deployment.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. INTRODUCTION & OBJECTIVES -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Introduction & Objectives</h2>
+                            <p class="text-xs text-slate-400">Context, architectural motivation, and project goals</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            Applications such as analytics platforms, event-processing systems, log services, and IoT platforms often need to persist a large volume of records. A traditional database may provide convenient updates and queries, but its storage and compute costs can become significant when datasets grow. Object storage offers low-cost capacity, high durability, and elastic scaling, making it attractive for storing large immutable data files.
+                        </p>
+                        <p>
+                            However, object storage typically exposes operations such as <code class="text-brand-cyan">PUT</code>, <code class="text-brand-cyan">GET</code>, and <code class="text-brand-cyan">DELETE</code> on complete objects rather than efficient in-place updates to arbitrary byte ranges. A database engine that attempts to update a single object for every small change may incur excessive write amplification, network traffic, and request costs. Reading many small objects to answer one query can also lead to high latency.
+                        </p>
+                        <p>
+                            An LSM-Tree addresses write-heavy workloads by converting random writes into sequential, batched writes. Incoming updates are first recorded in a write-ahead log (WAL) and held in an in-memory structure. Once the memory structure fills, its sorted contents are written as an immutable SSTable. Multiple SSTables may represent different versions of the same key. Compaction periodically merges files and reconciles these versions.
+                        </p>
+                    </div>
+
+                    <!-- Problem Statement Box -->
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-indigo/10 via-brand-violet/10 to-transparent border border-brand-indigo/30 space-y-2">
+                        <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-question"></i> 2.1 Problem Statement
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            "How can a key-value storage engine support efficient write and read operations over object storage, while minimizing object requests and data transfer, preserving updates across crashes, and managing immutable data files as the dataset grows?"
+                        </p>
+                    </div>
+
+                    <!-- Objectives List Grid -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-bullseye text-brand-emerald"></i> 2.2 System Objectives
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">LSM Architecture</strong> Build key-value storage engine based on Log-Structured Merge-Tree principles.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Write-Ahead Log (WAL)</strong> Maintain write durability for crash recovery prior to SSTable flushing.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Memtable Buffering</strong> Buffer writes in sorted memory buffers and flush immutable SSTables.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Object Abstraction</strong> Store SSTables and manifests through a uniform object storage interface.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Core Operations</strong> Full support for key-value PUT, GET, and tombstone DELETE requests.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Read Optimization</strong> Block indexes and probabilistic Bloom filters to reduce S3 HTTP calls.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Compaction Engine</strong> Merge overlapping SSTables, drop tombstones, and prune stale versions.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Manifest State Manager</strong> Maintain explicit database state metadata and file level tracking.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. SYSTEM ARCHITECTURE (INTERACTIVE DIAGRAMS) -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                                03
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white">3. System Architecture</h2>
+                                <p class="text-xs text-slate-400">Interactive diagram viewer & subsystem flow breakdown</p>
+                            </div>
+                        </div>
+
+                        <!-- Diagram View Tabs -->
+                        <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                            <button class="arch-tab px-3 py-1.5 rounded-lg active font-semibold text-white bg-brand-indigo shadow transition" data-tab="overview">
+                                Overview
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="write">
+                                Write Flow
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="read">
+                                Read Flow
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="compaction">
+                                Compaction Flow
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Diagram Container -->
+                    <div class="bg-slate-950/80 p-6 rounded-2xl border border-slate-800 relative overflow-hidden min-h-[380px] flex items-center justify-center">
+
+                        <!-- TAB 1: OVERVIEW DIAGRAM -->
+                        <div id="arch-overview" class="arch-pane w-full space-y-6">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider">High-Level Architecture</span>
+                                <h3 class="text-base font-bold text-white">LSM-Tree Storage Engine over Object Storage</h3>
+                            </div>
+
+                            <!-- Component Layout Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                                <!-- Engine Box -->
+                                <div class="md:col-span-2 p-4 rounded-2xl bg-slate-900/80 border border-slate-700/60 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                        <span class="font-bold text-white flex items-center gap-2">
+                                            <i class="fa-solid fa-microchip text-brand-indigo"></i> LSM-Tree Storage Engine Layer
+                                        </span>
+                                        <span class="text-[10px] bg-brand-indigo/20 text-brand-indigo px-2 py-0.5 rounded">Core Logic</span>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2">
+                                        <div class="p-2.5 rounded-xl bg-slate-800/80 text-center border border-slate-700/50">
+                                            <i class="fa-solid fa-file-pen text-brand-indigo text-base mb-1 block"></i>
+                                            <span class="font-semibold text-white block text-[11px]">Write-Ahead Log</span>
+                                            <span class="text-[10px] text-slate-400 block">Durable append log</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800/80 text-center border border-slate-700/50">
+                                            <i class="fa-solid fa-memory text-brand-emerald text-base mb-1 block"></i>
+                                            <span class="font-semibold text-white block text-[11px]">Memtable</span>
+                                            <span class="text-[10px] text-slate-400 block">In-memory skip list</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800/80 text-center border border-slate-700/50">
+                                            <i class="fa-solid fa-arrow-up-from-bracket text-brand-amber text-base mb-1 block"></i>
+                                            <span class="font-semibold text-white block text-[11px]">Flush Manager</span>
+                                            <span class="text-[10px] text-slate-400 block">Sorts & uploads</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-2 pt-1">
+                                        <div class="p-2.5 rounded-xl bg-slate-800/80 text-center border border-slate-700/50">
+                                            <i class="fa-solid fa-filter text-brand-violet text-base mb-1 block"></i>
+                                            <span class="font-semibold text-white block text-[11px]">Bloom Filter</span>
+                                            <span class="text-[10px] text-slate-400 block">Key existence test</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800/80 text-center border border-slate-700/50">
+                                            <i class="fa-solid fa-book text-brand-cyan text-base mb-1 block"></i>
+                                            <span class="font-semibold text-white block text-[11px]">Manifest</span>
+                                            <span class="text-[10px] text-slate-400 block">Active SSTable index</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800/80 text-center border border-slate-700/50">
+                                            <i class="fa-solid fa-[#10B981] fa-recycle text-brand-emerald text-base mb-1 block"></i>
+                                            <span class="font-semibold text-white block text-[11px]">Compaction</span>
+                                            <span class="text-[10px] text-slate-400 block">Merges & cleans</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Object Store Box -->
+                                <div class="p-4 rounded-2xl bg-brand-indigo/10 border border-brand-indigo/30 space-y-3 flex flex-col justify-between">
+                                    <div class="flex items-center justify-between border-b border-brand-indigo/20 pb-2">
+                                        <span class="font-bold text-white flex items-center gap-2">
+                                            <i class="fa-solid fa-cloud text-brand-indigo"></i> Object Storage
+                                        </span>
+                                        <span class="text-[10px] bg-brand-indigo/20 text-brand-indigo px-2 py-0.5 rounded">Remote</span>
+                                    </div>
+                                    <div class="space-y-2 text-center my-auto">
+                                        <div class="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] font-mono text-slate-300">
+                                            sstables/level-0/*.sst
+                                        </div>
+                                        <div class="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] font-mono text-slate-300">
+                                            sstables/level-1/*.sst
+                                        </div>
+                                        <div class="p-2 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] font-mono text-slate-300">
+                                            metadata/MANIFEST
+                                        </div>
+                                    </div>
+                                    <div class="text-[10px] text-slate-400 text-center">
+                                        S3 API: PutObject, GetObject, Range GET
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: WRITE FLOW -->
+                        <div id="arch-write" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider block text-center">Write Path Pipeline (PUT / DELETE)</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">1</div>
+                                    <div class="font-bold text-white">Client Request</div>
+                                    <div class="text-[11px] text-slate-400">PUT(key, val) or DELETE(key)</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">2</div>
+                                    <div class="font-bold text-white">Append to WAL</div>
+                                    <div class="text-[11px] text-slate-400">Writes sequential log entry</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">3</div>
+                                    <div class="font-bold text-white">Update Memtable</div>
+                                    <div class="text-[11px] text-slate-400">Buffers sorted in memory</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-emerald/20 text-brand-emerald font-bold mx-auto flex items-center justify-center">4</div>
+                                    <div class="font-bold text-white">Flush SSTable</div>
+                                    <div class="text-[11px] text-slate-400">Uploads SSTable to S3</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: READ FLOW -->
+                        <div id="arch-read" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-violet uppercase tracking-wider block text-center">Read Path Pipeline (GET)</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs">
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-violet">STEP 1</span>
+                                    <div class="font-bold text-white">Memtable</div>
+                                    <div class="text-[10px] text-slate-400">Check active & immutable</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-violet">STEP 2</span>
+                                    <div class="font-bold text-white">Manifest Check</div>
+                                    <div class="text-[10px] text-slate-400">Fetch active SSTables</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-violet">STEP 3</span>
+                                    <div class="font-bold text-white">Bloom Filter</div>
+                                    <div class="text-[10px] text-slate-400">Test key existence</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-violet">STEP 4</span>
+                                    <div class="font-bold text-white">Block Index</div>
+                                    <div class="text-[10px] text-slate-400">Locate byte offset</div>
+                                </div>
+                                <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-emerald">STEP 5</span>
+                                    <div class="font-bold text-white">Range GET</div>
+                                    <div class="text-[10px] text-slate-400">Read block & return value</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 4: COMPACTION FLOW -->
+                        <div id="arch-compaction" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-emerald uppercase tracking-wider block text-center">Compaction & Version Resolution</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="font-bold text-white">1. Select Files</div>
+                                    <div class="text-[11px] text-slate-400">Pick candidate SSTables in Level-N</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="font-bold text-white">2. Merge & Purge</div>
+                                    <div class="text-[11px] text-slate-400">Reconcile key versions & drop tombstones</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="font-bold text-white">3. Upload New SSTable</div>
+                                    <div class="text-[11px] text-slate-400">Write merged output to Level-N+1</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="font-bold text-white">4. Commit Manifest</div>
+                                    <div class="text-[11px] text-slate-400">Atomically update state & delete old files</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. STORAGE ENGINE CORE DEEP DIVE -->
+                <section id="engine-core" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-8">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. Storage Engine Core Deep Dive</h2>
+                            <p class="text-xs text-slate-400">Detailed component engineering and data structure specification</p>
+                        </div>
+                    </div>
+
+                    <!-- 4.1 Overview -->
+                    <div class="space-y-3">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="text-brand-indigo">4.1</span> Overview
+                        </h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            The LSM-Tree Storage Engine is the central component of the project. It transforms frequent small key-value updates into batches of sorted immutable files, which are suitable for object storage. Instead of modifying an existing SSTable in place, the engine creates new SSTables and later merges them through compaction.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs pt-2">
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">1. Write Handling</strong>
+                                <span class="text-slate-400">Records updates in WAL and exposes recent values via memtable.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">2. Flush & Persistence</strong>
+                                <span class="text-slate-400">Converts memory-resident data into sorted SSTables and uploads to S3.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">3. Read Path</strong>
+                                <span class="text-slate-400">Searches memory first, then checks Bloom filters & block indexes.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">4. Compaction</strong>
+                                <span class="text-slate-400">Merges files, resolves latest key versions, and prunes tombstones.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-brand-indigo block mb-1">5. Metadata & Recovery</strong>
+                                <span class="text-slate-400">Maintains active Manifest and replays WAL during cold restart.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4.2 Write Path & Memtable -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="text-brand-indigo">4.2</span> Write Path and Memtable
+                        </h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            When a client sends a <code class="text-brand-cyan">PUT</code> operation, the engine first validates the key and value. It appends the operation to the WAL before acknowledging the write, according to the configured durability policy. The operation is then applied to the memtable, where the latest value for the key becomes immediately visible to reads.
+                        </p>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            A <code class="text-brand-rose">DELETE</code> operation is represented as a tombstone rather than immediately removing every older copy of the key. The tombstone ensures that an older value in an SSTable is not mistakenly returned after a deletion.
+                        </p>
+                        <!-- Code / Pipeline box -->
+                        <div class="p-4 rounded-xl bg-slate-950 font-mono text-xs text-slate-300 space-y-2 border border-slate-800">
+                            <div class="text-brand-emerald font-bold">// Conceptual Write Pipeline</div>
+                            <div>PUT / DELETE &rarr; Append to WAL &rarr; Update Memtable &rarr; Acknowledge Client</div>
+                            <div class="text-brand-indigo font-bold pt-2">// Memtable Threshold Reached (Flush)</div>
+                            <div>Memtable &rarr; Freeze &amp; Sort Entries &rarr; Build Index &amp; Bloom Filter &rarr; Upload S3 Object &rarr; Commit Manifest Metadata</div>
+                        </div>
+                    </div>
+
+                    <!-- 4.3 SSTable Format & Read Operations -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="text-brand-indigo">4.3</span> SSTable Format and Read Operations
+                        </h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            An SSTable (Sorted String Table) is an immutable file containing key-value records sorted by key. A simple prototype can use a file format containing a header, sorted data blocks, a block index, optional Bloom-filter data, and a footer with offsets and checksums.
+                        </p>
+                        <!-- SSTable Structure Visualizer -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3">
+                            <span class="text-xs font-bold text-white block">SSTable Binary File Format Layout</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 text-center text-xs font-mono">
+                                <div class="p-2.5 rounded-lg bg-brand-indigo/20 border border-brand-indigo/30 text-indigo-300">
+                                    [ Header ]
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-300">
+                                    [ Sorted Data Blocks ]
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-brand-violet/20 border border-brand-violet/30 text-violet-300">
+                                    [ Block Index ]
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-brand-emerald/20 border border-brand-emerald/30 text-emerald-300">
+                                    [ Bloom Filter Data ]
+                                </div>
+                                <div class="p-2.5 rounded-lg bg-brand-cyan/20 border border-brand-cyan/30 text-cyan-300">
+                                    [ Footer &amp; Offsets ]
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            The block index maps key ranges to byte offsets or block identifiers. Rather than downloading an entire large SSTable for every query, the reader first retrieves the required metadata and then fetches the relevant block, if the object-storage API and chosen file layout support range reads. If range reads are unavailable, the engine fetches the full SSTable object and caches it locally.
+                        </p>
+                    </div>
+
+                    <!-- 4.4 Object Storage Integration -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <span class="text-brand-indigo">4.4</span> Object Storage Integration
+                        </h3>
+                        <p class="text-slate-300 text-sm leading-relaxed">
+                            The Object Storage Adapter isolates the engine from provider-specific storage APIs. A basic interface exposes operations such as <code class="text-brand-cyan">putObject(key, data)</code>, <code class="text-brand-cyan">getObject(key)</code>, <code class="text-brand-cyan">getRange(key, start, end)</code>, and <code class="text-brand-cyan">deleteObject(key)</code>.
+                        </p>
+                        <!-- S3 Key Structure Tree -->
+                        <div class="p-4 rounded-xl bg-slate-950 font-mono text-xs text-slate-300 space-y-1 border border-slate-800">
+                            <div class="text-slate-400">// Object Storage Key Prefix Hierarchy</div>
+                            <div><span class="text-brand-indigo">s3://my-lsm-bucket/</span></div>
+                            <div class="pl-4 text-slate-300 font-mono">├── sstables/</div>
+                            <div class="pl-8 text-slate-400">├── level-0/</div>
+                            <div class="pl-12 text-slate-200">├── sst-000001.sst</div>
+                            <div class="pl-12 text-slate-200">└── sst-000002.sst</div>
+                            <div class="pl-8 text-slate-400">└── level-1/</div>
+                            <div class="pl-12 text-slate-200">└── sst-000003.sst</div>
+                            <div class="pl-4 text-slate-300 font-mono">├── metadata/</div>
+                            <div class="pl-8 text-brand-emerald">└── MANIFEST-000004</div>
+                            <div class="pl-4 text-slate-300 font-mono">└── wal/</div>
+                            <div class="pl-8 text-slate-400">└── active.log</div>
+                        </div>
+                    </div>
+
+                    <!-- 4.5 & 4.6 Compaction & Recovery -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-800">
+                        <div class="space-y-3">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="text-brand-indigo">4.5</span> Compaction Strategy
+                            </h3>
+                            <p class="text-slate-300 text-sm leading-relaxed">
+                                Compaction selects SSTables, reads and merges their sorted entries, and writes a new SSTable containing the appropriate versions. For each key, it keeps the newest valid version according to the sequence-number ordering rules. Tombstones are safely discarded when no older values exist in lower levels.
+                            </p>
+                        </div>
+                        <div class="space-y-3">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="text-brand-indigo">4.6</span> Manifest & Recovery
+                            </h3>
+                            <p class="text-slate-300 text-sm leading-relaxed">
+                                The manifest records active SSTables, levels, key ranges, and generation IDs. During cold startup, the engine loads the manifest and replays eligible WAL records to reconstruct the exact un-flushed memory state.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. DATA FLOW, CONSISTENCY AND FAILURE HANDLING -->
+                <section id="data-flow" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. Data Flow, Consistency & Failure Handling</h2>
+                            <p class="text-xs text-slate-400">Durability guarantees, lifecycle flows, and fault-tolerance matrix</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-shield-halved text-brand-indigo"></i> 5.1 Read/Write Consistency
+                            </h4>
+                            <p class="text-slate-400">Writes acknowledged after WAL durability step. Reads prioritize highest sequence number (Memtable &gt; SSTables L0 &gt; L1).</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-water text-brand-violet"></i> 5.2 Flush Lifecycle
+                            </h4>
+                            <p class="text-slate-400">Memtable freezes, converts to SSTable, uploads under unique object key, updates Manifest, and truncates WAL.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-[#10B981] fa-layer-group text-brand-emerald"></i> 5.3 Compaction Flow
+                            </h4>
+                            <p class="text-slate-400">Merges key ranges, resolves tombstones, uploads target level SSTable, updates Manifest generation, and deletes obsolete objects.</p>
+                        </div>
+                    </div>
+
+                    <!-- Failure Matrix Table -->
+                    <div class="space-y-3 pt-4">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-triangle-exclamation text-brand-amber"></i> 5.4 Failure Handling & Performance Considerations
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Failure / Scenario</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Engine Recovery Mechanism</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Network Timeout on Upload</td>
+                                        <td class="px-4 py-3 text-slate-400">Retry with unique object key and idempotent strategy; never commit incomplete file.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Crash During Flush</td>
+                                        <td class="px-4 py-3 text-slate-400">Load last valid manifest generation; replay eligible uncommitted WAL records.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Crash During Compaction</td>
+                                        <td class="px-4 py-3 text-slate-400">Keep previous manifest generation active until new output files are fully uploaded and committed.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Corrupt SSTable Block</td>
+                                        <td class="px-4 py-3 text-slate-400">Detect via footer block checksum; report explicit read failure rather than silent corruption.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Excessive Object Overhead</td>
+                                        <td class="px-4 py-3 text-slate-400">Batch writes into SSTables, cache frequently accessed metadata, and leverage Range GETs.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="text-xs text-slate-400 italic pt-2">
+                            * Design Note: Object storage reduces cost and scales infinitely, but introduces network latency compared with <strong class="text-slate-200">local high-speed NVMe storage</strong>. Optimizing batch size, block caching, and range requests is paramount.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 9. LIVE INTERACTIVE ENGINE SIMULATOR (PROMINENT SECTION) -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Live Engine Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Test LSM operations: PUT, GET, DELETE, Flush, and Compaction over simulated Object Storage</p>
+                            </div>
+                        </div>
+
+                        <!-- Presets / Reset -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simPresetData" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-database text-brand-indigo mr-1"></i> Load Sample Data
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset Engine
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Controls Form -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+                            <div class="sm:col-span-4">
+                                <label class="block text-slate-400 mb-1 font-semibold">Key</label>
+                                <input type="text" id="simKey" placeholder="e.g. user:101" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                            </div>
+                            <div class="sm:col-span-5">
+                                <label class="block text-slate-400 mb-1 font-semibold">Value</label>
+                                <input type="text" id="simValue" placeholder="e.g. { name: 'Alice' }" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                            </div>
+                            <div class="sm:col-span-3 flex items-end gap-2">
+                                <button id="btnPut" class="w-full py-2 rounded-lg bg-brand-indigo hover:bg-indigo-600 text-white font-bold text-xs transition shadow-glow-indigo">
+                                    PUT
+                                </button>
+                                <button id="btnGet" class="w-full py-2 rounded-lg bg-brand-violet hover:bg-violet-600 text-white font-bold text-xs transition">
+                                    GET
+                                </button>
+                                <button id="btnDelete" class="w-full py-2 rounded-lg bg-brand-rose/80 hover:bg-brand-rose text-white font-bold text-xs transition">
+                                    DEL
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Manual Flush / Compaction Trigger Controls -->
+                        <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800 text-xs">
+                            <div class="flex items-center gap-2">
+                                <button id="btnTriggerFlush" class="px-4 py-2 rounded-xl bg-brand-emerald/20 hover:bg-brand-emerald/30 text-brand-emerald border border-brand-emerald/40 font-bold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-arrow-up-from-bracket"></i> Trigger Memtable Flush
+                                </button>
+                                <button id="btnTriggerCompaction" class="px-4 py-2 rounded-xl bg-brand-cyan/20 hover:bg-brand-cyan/30 text-brand-cyan border border-brand-cyan/40 font-bold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-arrows-split-up-and-left"></i> Trigger Compaction
+                                </button>
+                            </div>
+                            <div class="text-slate-400 text-[11px] font-mono">
+                                Memtable Capacity: <span id="simMemCapacity" class="text-white font-bold">0 / 4</span> entries
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Output State Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
+                        
+                        <!-- Panel 1: Memtable -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-indigo flex items-center gap-1.5">
+                                    <i class="fa-solid fa-memory"></i> Memtable
+                                </span>
+                                <span class="text-[10px] text-slate-400">RAM</span>
+                            </div>
+                            <div id="simMemtableList" class="space-y-1.5 min-h-[140px] max-h-[160px] overflow-y-auto">
+                                <div class="text-slate-500 text-center text-[11px] pt-10">Memtable empty</div>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div id="simMemtableBar" class="bg-brand-indigo h-full w-0 transition-all"></div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: WAL Log -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-amber flex items-center gap-1.5">
+                                    <i class="fa-solid fa-file-pen"></i> Write-Ahead Log
+                                </span>
+                                <span class="text-[10px] text-slate-400">WAL</span>
+                            </div>
+                            <div id="simWalList" class="space-y-1 text-[11px] text-slate-300 min-h-[140px] max-h-[160px] overflow-y-auto">
+                                <div class="text-slate-500 text-center pt-10">WAL log clear</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Append-only sequence</div>
+                        </div>
+
+                        <!-- Panel 3: Manifest State -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-violet flex items-center gap-1.5">
+                                    <i class="fa-solid fa-book"></i> Manifest Metadata
+                                </span>
+                                <span class="text-[10px] text-slate-400">State</span>
+                            </div>
+                            <div id="simManifestState" class="space-y-1 text-[11px] text-slate-300 min-h-[140px] max-h-[160px] overflow-y-auto">
+                                <div><span class="text-slate-500">Version:</span> <span class="text-brand-violet">MANIFEST-000001</span></div>
+                                <div><span class="text-slate-500">Active SSTables:</span> 0</div>
+                                <div><span class="text-slate-500">Seq Counter:</span> 0</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Commit Pointer</div>
+                        </div>
+
+                        <!-- Panel 4: Object Storage SSTables -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-emerald flex items-center gap-1.5">
+                                    <i class="fa-solid fa-cloud"></i> Object Storage (S3)
+                                </span>
+                                <span class="text-[10px] text-slate-400">SSTables</span>
+                            </div>
+                            <div id="simS3List" class="space-y-2 min-h-[140px] max-h-[160px] overflow-y-auto">
+                                <div class="text-slate-500 text-center text-[11px] pt-10">No SSTable objects</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Immutable objects</div>
+                        </div>
+                    </div>
+
+                    <!-- Query Trace Output Log -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <span class="text-slate-400 font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-brand-emerald"></i> Engine Execution &amp; Query Read Trace Path
+                            </span>
+                            <span class="text-[10px] text-slate-500">Real-time Operations</span>
+                        </div>
+                        <div id="simTraceLog" class="min-h-[90px] max-h-[130px] overflow-y-auto space-y-1 text-slate-300">
+                            <div class="text-slate-500 italic">Ready for commands. Perform a PUT, GET, or DELETE operation above.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. TECHNOLOGY STACK -->
+                <section id="tech-stack" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. Technology Stack</h2>
+                            <p class="text-xs text-slate-400">Implementation modules & software component specification</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-[10px] text-brand-indigo font-mono font-bold uppercase">Engine Implementation</span>
+                            <h4 class="font-bold text-white text-sm">Python / Node.js Prototype</h4>
+                            <p class="text-slate-400">Core key-value state engine logic and memtable handling.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-[10px] text-brand-violet font-mono font-bold uppercase">Data Structure</span>
+                            <h4 class="font-bold text-white text-sm">LSM-Tree &amp; SSTables</h4>
+                            <p class="text-slate-400">Skip-list in memory; sorted immutable binary files on storage.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-[10px] text-brand-emerald font-mono font-bold uppercase">Write Durability</span>
+                            <h4 class="font-bold text-white text-sm">Write-Ahead Log (WAL)</h4>
+                            <p class="text-slate-400">Sequential append log for full restart recovery.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-[10px] text-brand-cyan font-mono font-bold uppercase">Metadata System</span>
+                            <h4 class="font-bold text-white text-sm">Manifest Manager</h4>
+                            <p class="text-slate-400">Generation tracking and active file version mapping.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-[10px] text-brand-amber font-mono font-bold uppercase">Object Storage API</span>
+                            <h4 class="font-bold text-white text-sm">S3 Adapter / Local FS</h4>
+                            <p class="text-slate-400">Compatible with AWS S3, MinIO, Ceph, and Local Filesystem.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-1">
+                            <span class="text-[10px] text-brand-rose font-mono font-bold uppercase">Read Optimization</span>
+                            <h4 class="font-bold text-white text-sm">Bloom Filters &amp; Indexes</h4>
+                            <p class="text-slate-400">Probabilistic key membership and byte-offset range lookup.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. ADVANTAGES AND FUTURE SCOPE -->
+                <section id="advantages-scope" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-8">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Advantages & Future Scope</h2>
+                            <p class="text-xs text-slate-400">Strengths of the architecture and roadmap for production readiness</p>
+                        </div>
+                    </div>
+
+                    <!-- 7.1 Advantages -->
+                    <div class="space-y-4">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-thumbs-up text-brand-emerald"></i> 7.1 Architectural Advantages
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-bolt text-brand-indigo mt-1"></i>
+                                <div><strong class="text-white block mb-0.5">Write Efficiency</strong> Batches small updates into sequential immutable writes, drastically reducing S3 PUT overhead.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-expand text-brand-violet mt-1"></i>
+                                <div><strong class="text-white block mb-0.5">Scalable Capacity</strong> Uses cloud object stores for infinite, cost-effective data retention.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-puzzle-piece text-brand-emerald mt-1"></i>
+                                <div><strong class="text-white block mb-0.5">Separation of Concerns</strong> Decouples logical database execution from physical cloud storage provider APIs.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-filter text-brand-cyan mt-1"></i>
+                                <div><strong class="text-white block mb-0.5">Minimized Request Overhead</strong> Bloom filters and sparse indexes avoid unnecessary remote object downloads.</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 7.2 Future Scope Roadmap Grid -->
+                    <div class="space-y-4 pt-4 border-t border-slate-800">
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-rocket text-brand-indigo"></i> 7.2 Future Scope & Production Roadmap
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <span class="text-brand-indigo font-bold block">1. Block Compression</span>
+                                <span class="text-slate-400">Implement ZSTD/Snappy compression for reduced network bandwidth.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <span class="text-brand-violet font-bold block">2. Block & Metadata Cache</span>
+                                <span class="text-slate-400">Add LRU memory caching for frequent GET lookups.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <span class="text-brand-emerald font-bold block">3. Multi-part Uploads</span>
+                                <span class="text-slate-400">Support resilient multipart S3 uploads for large SSTables.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <span class="text-brand-cyan font-bold block">4. Observability Metrics</span>
+                                <span class="text-slate-400">Track Read/Write Amplification and S3 request counters via Prometheus.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <span class="text-brand-amber font-bold block">5. Distributed Coordination</span>
+                                <span class="text-slate-400">Integrate Raft / Etcd for multi-node consensus over object storage.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1">
+                                <span class="text-brand-rose font-bold block">6. Leveled Compaction</span>
+                                <span class="text-slate-400">Implement strict Leveled Compaction to bound read amplification.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. CONCLUSION -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Conclusion</h2>
+                            <p class="text-xs text-slate-400">Summary & engineering takeaway</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The <strong class="text-white">LSM-Tree Storage Engine over Object Storage</strong> demonstrates how database-style key-value operations can be built on top of an object-storage system. By buffering updates in memory, recording operations in a WAL, flushing sorted immutable SSTables, and merging files through compaction, the engine avoids relying on frequent in-place updates to stored objects.
+                        </p>
+                        <p>
+                            The architecture combines a memtable, WAL, SSTable reader, Bloom filters, block indexes, manifest metadata, compaction manager, and object-storage adapter. These components work together to support writes, reads, deletions, recovery, and long-term data organization. Unique immutable object names and careful manifest-update ordering help manage the risks associated with interrupted flushes and compactions.
+                        </p>
+                        <p>
+                            The main contribution of the project is the integration of an LSM-Tree storage model with an object-storage backend, while accounting for the trade-offs introduced by network latency and object request costs. The design can serve as a foundation for learning about storage engines, write amplification, read amplification, compaction, and durable metadata management.
+                        </p>
+                    </div>
+
+                    <!-- Final Author Credit Box -->
+                    <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between flex-wrap gap-3 text-xs">
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Engineering Faculty Guide</span>
+                            <span class="text-white font-bold">Priya R L</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Team Members</span>
+                            <span class="text-white font-semibold">Bhagyashri Joshi &amp; Neha Karkhanis</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-slate-400 block text-[10px] uppercase">Status</span>
+                            <span class="text-brand-emerald font-mono font-bold">Educational Prototype</span>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">L</div>
+                <span class="text-slate-300 font-semibold">LSM-Tree Storage Engine over Object Storage</span>
+            </div>
+            <div class="text-slate-400">
+                Faculty: Priya R L | Team: Bhagyashri Joshi, Neha Karkhanis
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: INTERACTIVE ENGINE SIMULATOR & UI NAVIGATION -->
+    <script>
+        // --- 1. READING PROGRESS BAR & SCROLLSPY ---
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            // Active TOC link highlighting
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) {
+                    current = sec.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // --- 2. MOBILE TOC DRAWER TOGGLE ---
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // --- 3. ARCHITECTURE DIAGRAM TABS ---
+        document.querySelectorAll('.arch-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.arch-tab').forEach(b => {
+                    b.classList.remove('active', 'bg-brand-indigo', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('active', 'bg-brand-indigo', 'text-white');
+                btn.classList.remove('text-slate-400');
+
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.arch-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById('arch-' + tab).classList.remove('hidden');
+            });
+        });
+
+        // --- 4. LIVE IN-PAGE SEARCH FUNCTIONALITY ---
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            if (val.length > 0) {
+                clearSearch.classList.remove('hidden');
+            } else {
+                clearSearch.classList.add('hidden');
+            }
+        });
+
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- 5. LIVE LSM-TREE STORAGE ENGINE SIMULATOR ---
+        class LSMEngineSimulator {
+            constructor() {
+                this.memCapacity = 4;
+                this.sequenceCounter = 0;
+                this.activeMemtable = []; // Array of { key, val, seq, isTombstone }
+                this.walLogs = [];
+                this.manifest = {
+                    version: 1,
+                    sequenceCounter: 0,
+                    activeSSTables: [] // Array of { id, level, keys: [], minKey, maxKey, bloomFilter }
+                };
+                this.sstableCounter = 1;
+                this.traceLogs = [];
+            }
+
+            logTrace(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let colorClass = 'text-slate-300';
+                if (type === 'success') colorClass = 'text-brand-emerald font-semibold';
+                if (type === 'warn') colorClass = 'text-brand-amber';
+                if (type === 'error') colorClass = 'text-brand-rose';
+                if (type === 'step') colorClass = 'text-brand-indigo font-mono';
+
+                this.traceLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.traceLogs.length > 30) this.traceLogs.pop();
+                this.renderUI();
+            }
+
+            put(key, val) {
+                if (!key) return this.logTrace('Error: Key cannot be empty', 'error');
+                this.sequenceCounter++;
+                const isTombstone = val === '<TOMBSTONE>';
+                const op = isTombstone ? 'DELETE' : 'PUT';
+
+                // 1. Append to WAL
+                this.walLogs.push(`[SEQ #${this.sequenceCounter}] ${op} ${key} = ${val}`);
+
+                // 2. Update Memtable (overwrite existing key in memtable if present)
+                const existingIdx = this.activeMemtable.findIndex(item => item.key === key);
+                const entry = { key, val, seq: this.sequenceCounter, isTombstone };
+
+                if (existingIdx >= 0) {
+                    this.activeMemtable[existingIdx] = entry;
+                } else {
+                    this.activeMemtable.push(entry);
+                }
+
+                // Sort Memtable by Key
+                this.activeMemtable.sort((a, b) => a.key.localeCompare(b.key));
+
+                this.logTrace(`WRITE ACCEPTED &rarr; WAL Appended & Memtable updated for key: '${key}' (Seq #${this.sequenceCounter})`, 'success');
+
+                // Auto flush check
+                if (this.activeMemtable.length >= this.memCapacity) {
+                    this.logTrace(`Memtable capacity threshold reached (${this.memCapacity}). Auto-triggering flush...`, 'warn');
+                    setTimeout(() => this.flush(), 400);
+                }
+
+                this.renderUI();
+            }
+
+            deleteKey(key) {
+                if (!key) return this.logTrace('Error: Key cannot be empty', 'error');
+                this.put(key, '<TOMBSTONE>');
+            }
+
+            get(key) {
+                if (!key) return this.logTrace('Error: Specify a key to lookup', 'error');
+                this.logTrace(`--- GET REQUEST FOR KEY: '${key}' ---`, 'step');
+
+                // Step 1: Check Active Memtable
+                const memMatch = this.activeMemtable.find(item => item.key === key);
+                if (memMatch) {
+                    if (memMatch.isTombstone) {
+                        this.logTrace(`[MEMTABLE MATCH] Key '${key}' was DELETED (Tombstone found). Return: NOT FOUND`, 'warn');
+                    } else {
+                        this.logTrace(`[MEMTABLE HIT] Key '${key}' found in Memory! Value: '${memMatch.val}' (Seq #${memMatch.seq})`, 'success');
+                    }
+                    return;
+                }
+                this.logTrace(`[MEMTABLE MISS] Key '${key}' not in memory. Searching S3 SSTables...`, 'info');
+
+                // Step 2: Search SSTables (Newest to Oldest)
+                const tables = [...this.manifest.activeSSTables].reverse();
+                if (tables.length === 0) {
+                    this.logTrace(`[OBJECT STORE MISS] No SSTables exist in Object Storage. Key '${key}' NOT FOUND`, 'error');
+                    return;
+                }
+
+                let found = false;
+                for (let sst of tables) {
+                    // Bloom Filter Check
+                    const bloomPass = sst.keys.some(k => k.key === key);
+                    if (!bloomPass) {
+                        this.logTrace(`[BLOOM FILTER] ${sst.id} (Level ${sst.level}) &rarr; Bloom Filter negative. Skipping S3 Object Read!`, 'info');
+                        continue;
+                    }
+
+                    // Key Range Check
+                    if (key < sst.minKey || key > sst.maxKey) {
+                        this.logTrace(`[RANGE INDEX] ${sst.id} range [${sst.minKey} - ${sst.maxKey}] excludes '${key}'. Skipping.`, 'info');
+                        continue;
+                    }
+
+                    // Object Block Range GET Read
+                    const match = sst.keys.find(k => k.key === key);
+                    if (match) {
+                        found = true;
+                        if (match.isTombstone) {
+                            this.logTrace(`[S3 OBJECT HIT] Found Tombstone in ${sst.id} for '${key}'. Key was DELETED.`, 'warn');
+                        } else {
+                            this.logTrace(`[S3 RANGE GET HIT] ${sst.id} returned Value: '${match.val}' (Seq #${match.seq})`, 'success');
+                        }
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    this.logTrace(`[QUERY COMPLETED] Key '${key}' NOT FOUND in any SSTable object.`, 'error');
+                }
+            }
+
+            flush() {
+                if (this.activeMemtable.length === 0) {
+                    return this.logTrace('Flush skipped: Memtable is empty.', 'info');
+                }
+
+                const sstId = `sst-${String(this.sstableCounter++).padStart(6, '0')}.sst`;
+                const keysCopy = [...this.activeMemtable];
+                const minKey = keysCopy[0].key;
+                const maxKey = keysCopy[keysCopy.length - 1].key;
+
+                const newSSTable = {
+                    id: sstId,
+                    level: 0,
+                    keys: keysCopy,
+                    minKey,
+                    maxKey,
+                    sizeBytes: keysCopy.length * 48
+                };
+
+                // Add to Object Store Manifest
+                this.manifest.activeSSTables.push(newSSTable);
+                this.manifest.version++;
+                this.manifest.sequenceCounter = this.sequenceCounter;
+
+                // Clear Memtable & WAL
+                this.activeMemtable = [];
+                this.walLogs = [];
+
+                this.logTrace(`FLUSH SUCCESSFUL &rarr; Uploaded Object 's3://bucket/sstables/level-0/${sstId}'. Manifest updated to MANIFEST-${String(this.manifest.version).padStart(6, '0')}`, 'success');
+                this.renderUI();
+            }
+
+            compact() {
+                const l0Tables = this.manifest.activeSSTables.filter(s => s.level === 0);
+                if (l0Tables.length < 2) {
+                    return this.logTrace('Compaction skipped: Need at least 2 Level-0 SSTables to merge.', 'warn');
+                }
+
+                this.logTrace(`BEGIN COMPACTION &rarr; Merging ${l0Tables.length} Level-0 SSTables into Level-1...`, 'step');
+
+                // Merge entries & resolve highest sequence number
+                const keyMap = new Map();
+                l0Tables.forEach(sst => {
+                    sst.keys.forEach(item => {
+                        if (!keyMap.has(item.key) || item.seq > keyMap.get(item.key).seq) {
+                            keyMap.set(item.key, item);
+                        }
+                    });
+                });
+
+                // Filter out tombstones during Level-1 compaction if safe
+                const mergedKeys = Array.from(keyMap.values())
+                    .filter(item => !item.isTombstone)
+                    .sort((a, b) => a.key.localeCompare(b.key));
+
+                if (mergedKeys.length === 0) {
+                    this.manifest.activeSSTables = this.manifest.activeSSTables.filter(s => s.level !== 0);
+                    this.manifest.version++;
+                    this.logTrace(`COMPACTION COMPLETED &rarr; All entries were tombstones. Pruned obsolete files.`, 'success');
+                    this.renderUI();
+                    return;
+                }
+
+                const newSSTable = {
+                    id: `sst-${String(this.sstableCounter++).padStart(6, '0')}.sst`,
+                    level: 1,
+                    keys: mergedKeys,
+                    minKey: mergedKeys[0].key,
+                    maxKey: mergedKeys[mergedKeys.length - 1].key,
+                    sizeBytes: mergedKeys.length * 48
+                };
+
+                // Replace Level-0 files with new Level-1 file
+                this.manifest.activeSSTables = [
+                    ...this.manifest.activeSSTables.filter(s => s.level !== 0),
+                    newSSTable
+                ];
+                this.manifest.version++;
+
+                this.logTrace(`COMPACTION SUCCESSFUL &rarr; Created Level-1 Object ${newSSTable.id}. Deleted old L0 objects. Manifest updated to MANIFEST-${String(this.manifest.version).padStart(6, '0')}`, 'success');
+                this.renderUI();
+            }
+
+            loadSampleData() {
+                this.put('user:101', 'Alice');
+                this.put('user:102', 'Bob');
+                this.put('user:103', 'Charlie');
+                this.put('user:104', 'Diana'); // Triggers auto flush
+                this.put('user:105', 'Evan');
+                this.put('user:101', 'Alice Updated'); // Update version
+                this.deleteKey('user:103'); // Tombstone
+                this.logTrace('Loaded sample dataset into engine.', 'info');
+            }
+
+            reset() {
+                this.activeMemtable = [];
+                this.walLogs = [];
+                this.manifest = { version: 1, sequenceCounter: 0, activeSSTables: [] };
+                this.sequenceCounter = 0;
+                this.sstableCounter = 1;
+                this.traceLogs = [];
+                this.logTrace('Engine reset to clean state.', 'info');
+            }
+
+            renderUI() {
+                // Memtable List & Capacity
+                const memList = document.getElementById('simMemtableList');
+                const memBar = document.getElementById('simMemtableBar');
+                document.getElementById('simMemCapacity').innerText = `${this.activeMemtable.length} / ${this.memCapacity}`;
+                memBar.style.width = `${(this.activeMemtable.length / this.memCapacity) * 100}%`;
+
+                if (this.activeMemtable.length === 0) {
+                    memList.innerHTML = `<div class="text-slate-500 text-center text-[11px] pt-8">Memtable empty</div>`;
+                } else {
+                    memList.innerHTML = this.activeMemtable.map(item => `
+                        <div class="p-1.5 rounded bg-slate-800 border border-slate-700/60 flex items-center justify-between">
+                            <span class="text-white font-bold">${item.key}</span>
+                            <span class="${item.isTombstone ? 'text-brand-rose' : 'text-brand-emerald'} font-mono">${item.val}</span>
+                        </div>
+                    `).join('');
+                }
+
+                // WAL List
+                const walList = document.getElementById('simWalList');
+                if (this.walLogs.length === 0) {
+                    walList.innerHTML = `<div class="text-slate-500 text-center text-[11px] pt-8">WAL log clear</div>`;
+                } else {
+                    walList.innerHTML = this.walLogs.map(log => `<div class="truncate">${log}</div>`).join('');
+                }
+
+                // Manifest State
+                const manifestEl = document.getElementById('simManifestState');
+                manifestEl.innerHTML = `
+                    <div><span class="text-slate-500">Version:</span> <span class="text-brand-violet font-bold">MANIFEST-${String(this.manifest.version).padStart(6, '0')}</span></div>
+                    <div><span class="text-slate-500">Active SSTables:</span> <span class="text-white">${this.manifest.activeSSTables.length}</span></div>
+                    <div><span class="text-slate-500">Seq Counter:</span> <span class="text-white">${this.sequenceCounter}</span></div>
+                `;
+
+                // S3 SSTable Objects
+                const s3List = document.getElementById('simS3List');
+                if (this.manifest.activeSSTables.length === 0) {
+                    s3List.innerHTML = `<div class="text-slate-500 text-center text-[11px] pt-8">No SSTable objects</div>`;
+                } else {
+                    s3List.innerHTML = this.manifest.activeSSTables.map(sst => `
+                        <div class="p-2 rounded bg-slate-800 border border-slate-700/80 space-y-1">
+                            <div class="flex items-center justify-between">
+                                <span class="text-brand-emerald font-bold">${sst.id}</span>
+                                <span class="text-[9px] px-1.5 py-0.5 rounded ${sst.level === 0 ? 'bg-brand-indigo/30 text-indigo-300' : 'bg-brand-emerald/30 text-emerald-300'} font-bold">Level ${sst.level}</span>
+                            </div>
+                            <div class="text-[10px] text-slate-400">Keys: [${sst.minKey} &rarr; ${sst.maxKey}] (${sst.keys.length} items)</div>
+                        </div>
+                    `).join('');
+                }
+
+                // Trace Logs
+                document.getElementById('simTraceLog').innerHTML = this.traceLogs.join('');
+            }
+        }
+
+        // Initialize Simulator
+        const engine = new LSMEngineSimulator();
+
+        document.getElementById('btnPut').addEventListener('click', () => {
+            const k = document.getElementById('simKey').value.trim();
+            const v = document.getElementById('simValue').value.trim();
+            engine.put(k, v || 'value_' + Math.floor(Math.random() * 1000));
+        });
+
+        document.getElementById('btnGet').addEventListener('click', () => {
+            const k = document.getElementById('simKey').value.trim();
+            engine.get(k);
+        });
+
+        document.getElementById('btnDelete').addEventListener('click', () => {
+            const k = document.getElementById('simKey').value.trim();
+            engine.deleteKey(k);
+        });
+
+        document.getElementById('btnTriggerFlush').addEventListener('click', () => engine.flush());
+        document.getElementById('btnTriggerCompaction').addEventListener('click', () => engine.compact());
+        document.getElementById('simPresetData').addEventListener('click', () => engine.loadSampleData());
+        document.getElementById('simReset').addEventListener('click', () => engine.reset());
+    </script>
+</body>
+</html>

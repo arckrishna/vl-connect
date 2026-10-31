@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Log Aggregator & Indexer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.3)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
+              'glow-rose': '0 0 25px -5px rgba(244, 63, 94, 0.3)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      /* Custom Scrollbar & Aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .gradient-text-emerald {
+        background: linear-gradient(135deg, #6EE7B7 0%, #10B981 50%, #06B6D4 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .gradient-text-amber {
+        background: linear-gradient(135deg, #FDE68A 0%, #F59E0B 50%, #D97706 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      /* Glow Effects */
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+      
+      .search-highlight {
+        background-color: rgba(245, 158, 11, 0.35);
+        color: #FDE68A;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    D
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Distributed Log Aggregator & Indexer
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">Case Study 25</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Advanced Cloud System Software Design – CA</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search case study..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Simulator Jump Button -->
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Live Lab Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Overview & Authors</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Introduction</a>
+                            <a href="#objectives" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Objectives</a>
+                            <a href="#theory" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Theory & Concepts</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. System Architecture</a>
+                            <a href="#system-flow" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. System Flow (Write/Read)</a>
+                            <a href="#breakscale-implementation" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Breakscale Implementation</a>
+                            <a href="#breakscale-figures" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Figures & Observations</a>
+                            <a href="#failure-handling" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Failure Handling & Tests</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Conclusion</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 10. System Simulator Lab
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Author Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Project Authors</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Prepared By</span>
+                                <span class="text-white font-semibold block">Jeegnasa Makwana (68)</span>
+                                <span class="text-white font-semibold block">Leena Chavan (69)</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase">Implementation Platform</span>
+                                <span class="text-brand-indigo font-semibold">Breakscale Virtual Lab</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">0. Overview & Authors</a>
+                        <a href="#introduction" class="mobile-toc-link block py-2 text-slate-300">1. Introduction</a>
+                        <a href="#objectives" class="mobile-toc-link block py-2 text-slate-300">2. Objectives</a>
+                        <a href="#theory" class="mobile-toc-link block py-2 text-slate-300">3. Theory</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">4. System Architecture</a>
+                        <a href="#system-flow" class="mobile-toc-link block py-2 text-slate-300">5. System Flow</a>
+                        <a href="#breakscale-implementation" class="mobile-toc-link block py-2 text-slate-300">6. Breakscale Implementation</a>
+                        <a href="#breakscale-figures" class="mobile-toc-link block py-2 text-slate-300">7. Figures & Observations</a>
+                        <a href="#failure-handling" class="mobile-toc-link block py-2 text-slate-300">8. Failure Handling & Testing</a>
+                        <a href="#conclusion" class="mobile-toc-link block py-2 text-slate-300">9. Conclusion</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">10. Live Simulator Lab</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-server"></i> CASE STUDY 25
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Advanced Cloud System Software Design
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Breakscale VLAB
+                            </span>
+                        </div>
+
+                        <!-- Paper Title -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Distributed Log Aggregator &amp; <span class="gradient-text">Indexer</span>
+                        </h1>
+
+                        <!-- Subtitle / Meta Summary -->
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            A fault-tolerant cloud architecture for real-time log ingestion, parallel worker normalization, persistent storage index mapping, and fast keyword-based search across VM clusters.
+                        </p>
+
+                        <!-- Authors & Details Grid -->
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Authors</span>
+                                <span class="text-white font-bold text-sm block">Jeegnasa Makwana (68)</span>
+                                <span class="text-white font-bold text-sm block">Leena Chavan (69)</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Course & Context</span>
+                                <span class="text-slate-200 font-semibold block">Cloud System Software Design</span>
+                                <span class="text-slate-400 text-[11px]">Continuous Assessment (CA)</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Storage Engine</span>
+                                <span class="text-brand-indigo font-mono font-bold block text-xs">Persistent Storage (EBS)</span>
+                                <span class="text-slate-300 text-[11px]">Inverted Index Mapping</span>
+                            </div>
+                        </div>
+
+                        <!-- Hero Action Controls -->
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Breakscale Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore System Architecture
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. INTRODUCTION -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Introduction</h2>
+                            <p class="text-xs text-slate-400">Background and problem framing for log aggregation</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            A log is a record of an activity or event generated by an application or server. When multiple cloud servers run simultaneously, they produce many log records. Checking each server separately to find a particular error or event can be difficult and time-consuming.
+                        </p>
+                        <p>
+                            The <strong class="text-white">Distributed Log Aggregator &amp; Indexer</strong> collects logs from multiple sources, processes and stores them centrally, and creates an index to support faster searching. Users can search for specific log messages or events through a search interface. The case study is based on cloud computing concepts such as virtual machine clusters and persistent block storage. The Breakscale implementation demonstrates the main collection, processing, storage, indexing, and search pipeline.
+                        </p>
+                    </div>
+
+                    <!-- Highlight Key Concepts Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                        <div class="glass-card p-4 rounded-2xl border-brand-indigo/30">
+                            <div class="text-brand-indigo text-lg mb-1"><i class="fa-solid fa-cloud-arrow-down"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Centralized Ingestion</h4>
+                            <p class="text-[11px] text-slate-400">Consolidates scattered application logs into a single high-throughput processing pipeline.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-violet/30">
+                            <div class="text-brand-violet text-lg mb-1"><i class="fa-solid fa-list-check"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Inverted Term Indexing</h4>
+                            <p class="text-[11px] text-slate-400">Maps error terms and keywords to record IDs for sub-second query lookups.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-emerald/30">
+                            <div class="text-brand-emerald text-lg mb-1"><i class="fa-solid fa-cubes"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Persistent Storage</h4>
+                            <p class="text-[11px] text-slate-400">Stores durable full log records using cloud persistent block storage (EBS).</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. OBJECTIVES -->
+                <section id="objectives" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Objectives</h2>
+                            <p class="text-xs text-slate-400">Core functional and operational goals of the case study</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Log Collection</strong> Collect log records from application sources.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Central Forwarding</strong> Send incoming logs to a central aggregator.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Parallel Processing</strong> Process and organize log records using workers.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Persistent Storage</strong> Store processed logs persistently in block storage.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Inverted Indexing</strong> Create an inverted index to support efficient searching.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Search Retrieval</strong> Provide a search interface to retrieve matching logs.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Workload Observation</strong> Observe system performance under variable workload.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Failure Handling</strong> Describe possible failure-handling approaches and identify recovery tests.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. THEORY -->
+                <section id="theory" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Theory</h2>
+                            <p class="text-xs text-slate-400">Distributed log handling principles and component taxonomy</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6 text-sm text-slate-300">
+                        <!-- 3.1 -->
+                        <div class="space-y-2">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="text-brand-indigo font-mono">3.1</span> Log Aggregation
+                            </h3>
+                            <p class="leading-relaxed">
+                                Log aggregation is the process of collecting log records from different servers or applications into a central system. It gives administrators one place to inspect and search application events.
+                            </p>
+                        </div>
+
+                        <!-- 3.2 -->
+                        <div class="space-y-2 pt-4 border-t border-slate-800">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="text-brand-indigo font-mono">3.2</span> Log Source and Aggregator
+                            </h3>
+                            <p class="leading-relaxed">
+                                An application log source generates records such as errors, warnings, and activity messages. The Log Aggregator receives incoming records and forwards them into the processing pipeline. A separate log-tailing agent or load balancer may be included in a larger design, but these are not shown as separate components in the current Breakscale implementation.
+                            </p>
+                        </div>
+
+                        <!-- 3.3 -->
+                        <div class="space-y-2 pt-4 border-t border-slate-800">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="text-brand-indigo font-mono">3.3</span> Queue and Processing Workers
+                            </h3>
+                            <p class="leading-relaxed">
+                                A processing queue temporarily holds incoming work until workers are ready. Workers take records from the queue, parse or normalize them, and prepare them for storage and indexing. Multiple workers can process different records in parallel.
+                            </p>
+                        </div>
+
+                        <!-- 3.4 -->
+                        <div class="space-y-2 pt-4 border-t border-slate-800">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="text-brand-indigo font-mono">3.4</span> Persistent Storage and Inverted Index
+                            </h3>
+                            <p class="leading-relaxed">
+                                Persistent storage keeps the complete log records. An inverted index maps searchable words or terms to the IDs of records that contain them. For example, it can identify which records contain the word <code class="text-brand-rose bg-rose-950/50 px-1.5 py-0.5 rounded border border-rose-800/40">ERROR</code>. The Search API uses the index to locate matches and retrieve the corresponding log records.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. SYSTEM ARCHITECTURE -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. System Architecture</h2>
+                            <p class="text-xs text-slate-400">Conceptual cloud topology and component breakdown</p>
+                        </div>
+                    </div>
+
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        The Breakscale architecture follows this main flow:
+                    </p>
+
+                    <!-- Flow pill diagram -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-slate-200 overflow-x-auto">
+                        <div class="flex items-center gap-2 whitespace-nowrap font-mono justify-between min-w-[700px]">
+                            <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">App Log Source</span>
+                            <i class="fa-solid fa-arrow-right text-brand-indigo"></i>
+                            <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">Log Aggregator</span>
+                            <i class="fa-solid fa-arrow-right text-brand-indigo"></i>
+                            <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">Message Queue</span>
+                            <i class="fa-solid fa-arrow-right text-brand-indigo"></i>
+                            <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">3 Workers</span>
+                            <i class="fa-solid fa-arrow-right text-brand-indigo"></i>
+                            <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">Persistent Storage</span>
+                            <i class="fa-solid fa-arrows-rotate text-brand-emerald"></i>
+                            <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">Inverted Index</span>
+                            <i class="fa-solid fa-arrow-left-long text-brand-cyan"></i>
+                            <span class="px-2.5 py-1 rounded bg-slate-800 border border-slate-700">Search API / Client</span>
+                        </div>
+                    </div>
+
+                    <!-- Conceptual Architecture Diagram -->
+                    <div class="p-6 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-sitemap text-brand-indigo"></i> VPC Network Boundary (Cloud VM Cluster)
+                            </span>
+                            <span class="text-[10px] bg-brand-indigo/20 text-brand-indigo px-2 py-0.5 rounded font-mono">Conceptual Map</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                            <!-- Left: Sources -->
+                            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                                <div class="font-bold text-white border-b border-slate-800 pb-2">Log Ingestion Sources</div>
+                                <div class="p-2 rounded bg-slate-800/80 border border-slate-700 text-slate-300 flex items-center gap-2">
+                                    <i class="fa-solid fa-server text-slate-400"></i> Server 1 (App + Log Agent)
+                                </div>
+                                <div class="p-2 rounded bg-slate-800/80 border border-slate-700 text-slate-300 flex items-center gap-2">
+                                    <i class="fa-solid fa-server text-slate-400"></i> Server 2 (App + Log Agent)
+                                </div>
+                                <div class="p-2 rounded bg-slate-800/80 border border-slate-700 text-slate-300 flex items-center gap-2">
+                                    <i class="fa-solid fa-server text-slate-400"></i> Server 3 (App + Log Agent)
+                                </div>
+                            </div>
+
+                            <!-- Middle: Queue & Workers -->
+                            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+                                <div class="font-bold text-white border-b border-slate-800 pb-2">Processing Core</div>
+                                <div class="p-2 rounded bg-brand-indigo/10 border border-brand-indigo/30 text-indigo-200 text-center font-semibold">
+                                    Log Aggregator &amp; Load Balancer
+                                </div>
+                                <div class="p-2 rounded bg-brand-amber/10 border border-brand-amber/30 text-amber-200 text-center font-mono">
+                                    Message Queue (Buffer)
+                                </div>
+                                <div class="space-y-1">
+                                    <div class="p-1.5 rounded bg-slate-800 text-slate-300 text-center">Processing Worker 1</div>
+                                    <div class="p-1.5 rounded bg-slate-800 text-slate-300 text-center">Processing Worker 2</div>
+                                    <div class="p-1.5 rounded bg-slate-800 text-slate-300 text-center">Processing Worker 3</div>
+                                </div>
+                            </div>
+
+                            <!-- Right: Storage & Search -->
+                            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+                                <div class="font-bold text-white border-b border-slate-800 pb-2">Storage &amp; Search API</div>
+                                <div class="p-2 rounded bg-brand-rose/10 border border-brand-rose/30 text-rose-200 text-center font-semibold">
+                                    Persistent Log Storage (EBS)
+                                </div>
+                                <div class="p-2 rounded bg-brand-violet/10 border border-brand-violet/30 text-violet-200 text-center font-semibold">
+                                    Inverted Index (Term &rarr; Record IDs)
+                                </div>
+                                <div class="p-2 rounded bg-brand-emerald/10 border border-brand-emerald/30 text-emerald-200 text-center font-semibold">
+                                    Search API &amp; Dashboard Client
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4.1 Component Table -->
+                    <div class="space-y-3 pt-4">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-table-list text-brand-indigo"></i> 4.1 Components and Functions
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Component</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Function</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Application Log Source</td>
+                                        <td class="px-4 py-3 text-slate-400">Generates log records.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Log Aggregator</td>
+                                        <td class="px-4 py-3 text-slate-400">Receives incoming logs and forwards them to the queue.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Log Processing Queue</td>
+                                        <td class="px-4 py-3 text-slate-400">Holds incoming work for workers.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Three Log Processing Workers</td>
+                                        <td class="px-4 py-3 text-slate-400">Process log records in parallel.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Persistent Log Storage</td>
+                                        <td class="px-4 py-3 text-slate-400">Stores processed log records persistently on cloud block storage.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Inverted Index</td>
+                                        <td class="px-4 py-3 text-slate-400">Maps searchable terms to matching log record IDs.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Search API</td>
+                                        <td class="px-4 py-3 text-slate-400">Accepts search requests and retrieves matching records.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Search Client</td>
+                                        <td class="px-4 py-3 text-slate-400">Provides the user-facing search interface.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. SYSTEM FLOW -->
+                <section id="system-flow" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. System Flow</h2>
+                            <p class="text-xs text-slate-400">Sequential write path (ingestion) and read path (search query)</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- Write Path -->
+                        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
+                            <h3 class="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
+                                <i class="fa-solid fa-right-to-bracket text-brand-indigo"></i> 5.1 Write Path (Log Ingestion)
+                            </h3>
+                            <div class="text-xs text-slate-400 font-mono bg-slate-950 p-2 rounded border border-slate-800">
+                                App Log Source &rarr; Log Aggregator &rarr; Queue &rarr; Workers &rarr; Persistent Storage + Index
+                            </div>
+                            <ol class="list-decimal list-inside text-xs text-slate-300 space-y-2 leading-relaxed">
+                                <li>The application source generates a log record.</li>
+                                <li>The Log Aggregator receives the record and sends it to the processing queue.</li>
+                                <li>The queue makes pending records available to the workers.</li>
+                                <li>A worker processes and organizes the record.</li>
+                                <li>The processed log record is saved in Persistent Log Storage, and its searchable terms are added to the Inverted Index.</li>
+                            </ol>
+                        </div>
+
+                        <!-- Read Path -->
+                        <div class="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
+                            <h3 class="text-sm font-bold text-white flex items-center gap-2 border-b border-slate-800 pb-2">
+                                <i class="fa-solid fa-magnifying-glass text-brand-violet"></i> 5.2 Read Path (Search)
+                            </h3>
+                            <div class="text-xs text-slate-400 font-mono bg-slate-950 p-2 rounded border border-slate-800">
+                                Search Client &rarr; Search API &rarr; Inverted Index &rarr; Persistent Storage &rarr; Search Client
+                            </div>
+                            <ol class="list-decimal list-inside text-xs text-slate-300 space-y-2 leading-relaxed">
+                                <li>The user enters a keyword or other search condition in the Search Client.</li>
+                                <li>The Search API checks the inverted index to identify matching log record IDs.</li>
+                                <li>The system retrieves the matching full records from persistent storage.</li>
+                                <li>The Search API returns the results to the Search Client.</li>
+                            </ol>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. IMPLEMENTATION USING BREAKSCALE -->
+                <section id="breakscale-implementation" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. Implementation Using Breakscale</h2>
+                            <p class="text-xs text-slate-400">Virtual lab assembly steps and component connections</p>
+                        </div>
+                    </div>
+
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        The system was assembled in the Breakscale virtual lab using the components visible in the supplied screenshots: Application Log Source, Log Aggregator, Log Processing Queue, three Log Processing Workers, Persistent Log Storage, Inverted Index, Search API, and Search Client. The current workspace does not show separate Log-Tailing Agent or Load Balancer components, so they are not counted as implemented components in this report.
+                    </p>
+
+                    <div class="space-y-2 pt-2">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-ol text-brand-rose"></i> 6.1 Implementation Steps
+                        </h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="w-5 h-5 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center flex-shrink-0 text-[10px]">1</span>
+                                <span>Configure the Application Log Source to generate log traffic.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="w-5 h-5 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center flex-shrink-0 text-[10px]">2</span>
+                                <span>Connect the Application Log Source to the Log Aggregator.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="w-5 h-5 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center flex-shrink-0 text-[10px]">3</span>
+                                <span>Connect the Log Aggregator to the Log Processing Queue.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="w-5 h-5 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center flex-shrink-0 text-[10px]">4</span>
+                                <span>Configure three Processing Workers to receive and process logs from the queue.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="w-5 h-5 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center flex-shrink-0 text-[10px]">5</span>
+                                <span>Connect the Processing Workers to Persistent Log Storage.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                                <span class="w-5 h-5 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center flex-shrink-0 text-[10px]">6</span>
+                                <span>Connect Persistent Log Storage to the Inverted Index so records can be indexed for searching.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5 sm:col-span-2">
+                                <span class="w-5 h-5 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold flex items-center justify-center flex-shrink-0 text-[10px]">7</span>
+                                <span>Connect the Inverted Index and storage side to the Search API, and connect the Search API to the Search Client.</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5 sm:col-span-2">
+                                <span class="w-5 h-5 rounded-full bg-brand-emerald/20 text-brand-emerald font-bold flex items-center justify-center flex-shrink-0 text-[10px]">8</span>
+                                <span>Run the workload in Breakscale and observe the displayed system metrics.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. BREAKSCALE FIGURES AND OBSERVATIONS -->
+                <section id="breakscale-figures" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-8">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Breakscale Figures &amp; Observations</h2>
+                            <p class="text-xs text-slate-400">Experimental results and system behavior under varying conditions</p>
+                        </div>
+                    </div>
+
+                    <!-- Figure 1 -->
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-white">Figure 1: Complete Breakscale VLAB Architecture</h3>
+                            <span class="text-xs px-2 py-0.5 rounded bg-brand-indigo/20 text-brand-indigo font-mono">Layout</span>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="text-xs text-slate-300 leading-relaxed">
+                                This figure presents the complete component layout used in the Breakscale virtual lab, including the log source, aggregator, processing queue, workers, persistent storage, inverted index, Search API, and Search Client.
+                            </div>
+                            <!-- Styled Component Nodes Representation -->
+                            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3">
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs font-mono">
+                                    <div class="p-2.5 rounded-lg bg-indigo-950/60 border border-indigo-700/60 text-indigo-300">
+                                        App Log Source
+                                        <div class="text-[10px] text-slate-400">121/s SENT</div>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-200">
+                                        Log Aggregator
+                                        <div class="text-[10px] text-slate-400">4.2% BUSY</div>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-purple-950/60 border border-purple-700/60 text-purple-300">
+                                        Message Queue
+                                        <div class="text-[10px] text-slate-400">0 WAITING</div>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-cyan-950/60 border border-cyan-700/60 text-cyan-300">
+                                        3 Workers
+                                        <div class="text-[10px] text-slate-400">41%, 60%, 3.8%</div>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-xs font-mono pt-1">
+                                    <div class="p-2.5 rounded-lg bg-teal-950/60 border border-teal-700/60 text-teal-300">
+                                        Persistent Storage
+                                        <div class="text-[10px] text-slate-400">32% BUSY | 88ms P99</div>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-amber-950/60 border border-amber-700/60 text-amber-300">
+                                        Inverted Index
+                                        <div class="text-[10px] text-slate-400">83% HIT | 56ms P99</div>
+                                    </div>
+                                    <div class="p-2.5 rounded-lg bg-indigo-950/60 border border-indigo-700/60 text-indigo-300">
+                                        Search API &amp; Client
+                                        <td class="text-[10px] text-slate-400">24% BUSY | 53/s SENT</td>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Figure 2 -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-white">Figure 2: Normal Operation of System</h3>
+                            <span class="text-xs px-2 py-0.5 rounded bg-brand-emerald/20 text-brand-emerald font-mono">170 req/s Offered</span>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs font-mono">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">SYSTEM P99</span>
+                                    <span class="text-brand-emerald font-bold text-base">43ms</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">GOODPUT</span>
+                                    <span class="text-white font-bold text-base">180/s</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">ERRORS</span>
+                                    <span class="text-brand-emerald font-bold text-base">0%</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">DROPPED</span>
+                                    <span class="text-slate-300 font-bold text-base">0/s</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                This figure records the system during normal operation, with log records moving through the aggregation and processing pipeline toward persistent block storage and indexing, while the search path is available to the client.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Figure 3 -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-white">Figure 3: Behavior Under High Offered Load</h3>
+                            <span class="text-xs px-2 py-0.5 rounded bg-brand-rose/20 text-brand-rose font-mono">2.3k req/s Load</span>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs font-mono">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">SYSTEM P99</span>
+                                    <span class="text-brand-rose font-bold text-base">262ms</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">GOODPUT</span>
+                                    <span class="text-white font-bold text-base">1.9k/s</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">ERRORS</span>
+                                    <span class="text-brand-rose font-bold text-base">15%</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">QUEUE WAITING</span>
+                                    <span class="text-brand-amber font-bold text-base">3178</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                This figure shows the system behaviour under increased offered load. The effect of the increased workload can be examined through system latency (262ms P99), goodput, error rate (15%), and queue waiting (3178 pending records).
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Figure 4 -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-white">Figure 4: Behavior When Processing Worker 2 Fails</h3>
+                            <span class="text-xs px-2 py-0.5 rounded bg-brand-amber/20 text-brand-amber font-mono">Worker Fault Injected</span>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs font-mono">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">WORKER 2 STATUS</span>
+                                    <span class="text-brand-rose font-bold text-xs">100% ERROR RATE</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">WORKER 2 UTIL</span>
+                                    <span class="text-brand-rose font-bold text-xs">98% BUSY (0/s DONE)</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">SYSTEM P99</span>
+                                    <span class="text-white font-bold text-base">52ms</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">SYSTEM GOODPUT</span>
+                                    <span class="text-slate-200 font-bold text-base">123/s</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                Log Processing Worker 2 was configured with a 100% error rate to simulate worker failure. The worker failed its incoming requests while the remaining workers continued processing. The resulting changes in errors, goodput, and queue behaviour demonstrate the effect of worker failure on the distributed log processing system.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Figure 5 -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-sm font-bold text-white">Figure 5: Recovery After Processing Worker 2 Restored</h3>
+                            <span class="text-xs px-2 py-0.5 rounded bg-brand-emerald/20 text-brand-emerald font-mono">Restored State</span>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center text-xs font-mono">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">WORKER 2 STATUS</span>
+                                    <span class="text-brand-emerald font-bold text-xs">0% ERRORS RESTORED</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">WORKER 2 UTIL</span>
+                                    <span class="text-brand-emerald font-bold text-xs">56% BUSY (87/s DONE)</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">SYSTEM P99</span>
+                                    <span class="text-brand-emerald font-bold text-base">48ms</span>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                                    <span class="text-slate-400 block text-[10px]">SYSTEM GOODPUT</span>
+                                    <span class="text-white font-bold text-base">118/s</span>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                After the error rate of Log Processing Worker 2 was restored to 0%, the worker resumed normal processing. The failed requests were no longer generated by the worker, and the system returned toward stable operation. This demonstrates the recovery of the distributed log-processing system after a worker failure.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. FAILURE HANDLING AND TESTING -->
+                <section id="failure-handling" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Failure Handling and Testing</h2>
+                            <p class="text-xs text-slate-400">Fault isolation and recovery evaluation matrix</p>
+                        </div>
+                    </div>
+
+                    <p class="text-slate-300 text-sm leading-relaxed">
+                        The following are possible handling approaches and tests to perform. They should not be described as verified recovery unless the corresponding fault-injection test has been run in Breakscale.
+                    </p>
+
+                    <!-- Table -->
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Failure or Test</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Possible Handling / Observation</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Worker failure</td>
+                                    <td class="px-4 py-3 text-slate-400">Observe whether pending work remains in the queue and whether another worker continues processing.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Queue overload</td>
+                                    <td class="px-4 py-3 text-slate-400">Increase offered load gradually and observe queue waiting and latency.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Network failure</td>
+                                    <td class="px-4 py-3 text-slate-400">Check whether records are buffered or retried, if the lab supports the test.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Storage failure</td>
+                                    <td class="px-4 py-3 text-slate-400">Observe write errors and whether pending records can be retried.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Index failure</td>
+                                    <td class="px-4 py-3 text-slate-400">A possible recovery design is to rebuild the index from stored logs; verify separately.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 9. CONCLUSION -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Conclusion</h2>
+                            <p class="text-xs text-slate-400">Summary & architectural takeaway</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The <strong class="text-white">Distributed Log Aggregator &amp; Indexer</strong> provides a centralized solution for collecting, processing, storing, and searching log records from multiple application sources. The system uses a processing queue and parallel workers to handle incoming logs, persistent storage to maintain log records, and an inverted index to support efficient searching.
+                        </p>
+                        <p>
+                            The Breakscale implementation demonstrates the complete log-processing and search workflow. Overall, this case study shows how distributed cloud components work together to simplify log management and help users find important application events quickly.
+                        </p>
+                    </div>
+
+                    <!-- Author Signature Box -->
+                    <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between flex-wrap gap-3 text-xs">
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Prepared By</span>
+                            <span class="text-white font-bold">Jeegnasa Makwana (68) &amp; Leena Chavan (69)</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-slate-400 block text-[10px] uppercase">Status</span>
+                            <span class="text-brand-emerald font-mono font-bold">Breakscale VLAB Verified</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 10. LIVE INTERACTIVE BREAKSCALE SIMULATOR LAB -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Breakscale Live System Lab &amp; Search Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Ingest logs, toggle worker failures, inspect persistent storage &amp; perform inverted index search</p>
+                            </div>
+                        </div>
+
+                        <!-- Load Preset & Reset Controls -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simLoadPreset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-cloud-arrow-up text-brand-indigo mr-1"></i> Ingest Sample Batch
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Clear State
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Controls Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        
+                        <!-- Left Controls: Ingestion Form -->
+                        <div class="md:col-span-7 bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3">
+                            <span class="text-xs font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-paper-plane text-brand-indigo"></i> Log Ingestion Generator
+                            </span>
+                            
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                <div>
+                                    <label class="block text-slate-400 mb-1">Level</label>
+                                    <select id="simLogLevel" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                        <option value="INFO">INFO</option>
+                                        <option value="WARN">WARN</option>
+                                        <option value="ERROR">ERROR</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-slate-400 mb-1">Source App</label>
+                                    <input type="text" id="simLogSource" value="App-Server-1" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                </div>
+                                <div>
+                                    <label class="block text-slate-400 mb-1">Worker Pool</label>
+                                    <button id="simProcessQueue" class="w-full py-2 rounded-lg bg-brand-indigo hover:bg-indigo-600 text-white font-bold transition shadow-glow-indigo">
+                                        Process Queue
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-2 text-xs">
+                                <input type="text" id="simLogMsg" placeholder="Log event message, e.g. DATABASE TIMEOUT ERROR..." class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                <button id="btnEmitLog" class="px-4 py-2 rounded-lg bg-brand-emerald hover:bg-emerald-600 text-white font-bold whitespace-nowrap transition">
+                                    Emit Log
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Right Controls: Workload Rate & Fault Injection -->
+                        <div class="md:col-span-5 bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3">
+                            <span class="text-xs font-bold text-white flex items-center justify-between">
+                                <span class="flex items-center gap-2"><i class="fa-solid fa-gauge-high text-brand-amber"></i> Workload &amp; Fault Injection</span>
+                                <span id="simWorkloadBadge" class="text-[10px] px-2 py-0.5 rounded bg-brand-emerald/20 text-brand-emerald font-mono">170 req/s Normal</span>
+                            </span>
+
+                            <div class="flex items-center justify-between gap-2 text-xs">
+                                <button id="btnNormalLoad" class="w-full py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold transition">
+                                    Normal Load (170/s)
+                                </button>
+                                <button id="btnHighLoad" class="w-full py-1.5 rounded-lg bg-brand-rose/20 text-brand-rose border border-brand-rose/40 font-semibold hover:bg-brand-rose/30 transition">
+                                    High Load (2.3k/s)
+                                </button>
+                            </div>
+
+                            <!-- Worker Fault Toggles -->
+                            <div class="pt-2 border-t border-slate-800 text-xs space-y-1.5">
+                                <span class="text-[11px] text-slate-400 block font-semibold">Worker Health Controls:</span>
+                                <div class="grid grid-cols-3 gap-2 text-[11px]">
+                                    <button id="toggleW1" class="py-1 px-2 rounded bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/40 font-mono font-bold">
+                                        W1: ONLINE
+                                    </button>
+                                    <button id="toggleW2" class="py-1 px-2 rounded bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/40 font-mono font-bold">
+                                        W2: ONLINE
+                                    </button>
+                                    <button id="toggleW3" class="py-1 px-2 rounded bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/40 font-mono font-bold">
+                                        W3: ONLINE
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Architecture State Visualization Grid -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
+                        
+                        <!-- Queue -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-amber flex items-center gap-1.5">
+                                    <i class="fa-solid fa-layer-group"></i> Message Queue
+                                </span>
+                                <span id="queueCountBadge" class="text-[10px] text-slate-400">0 Pending</span>
+                            </div>
+                            <div id="simQueueList" class="space-y-1.5 min-h-[140px] max-h-[160px] overflow-y-auto text-[11px]">
+                                <div class="text-slate-500 text-center pt-10">Queue empty</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Buffering Layer</div>
+                        </div>
+
+                        <!-- Worker Status -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-indigo flex items-center gap-1.5">
+                                    <i class="fa-solid fa-gears"></i> 3 Workers
+                                </span>
+                                <span class="text-[10px] text-slate-400">Compute</span>
+                            </div>
+                            <div id="simWorkerStatusList" class="space-y-2 min-h-[140px] max-h-[160px] overflow-y-auto text-[11px]">
+                                <!-- Workers injected here -->
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Parallel Execution</div>
+                        </div>
+
+                        <!-- Persistent Storage -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-rose flex items-center gap-1.5">
+                                    <i class="fa-solid fa-database"></i> Storage (EBS)
+                                </span>
+                                <span id="storageCountBadge" class="text-[10px] text-slate-400">0 Logs</span>
+                            </div>
+                            <div id="simStorageList" class="space-y-1.5 min-h-[140px] max-h-[160px] overflow-y-auto text-[11px]">
+                                <div class="text-slate-500 text-center pt-10">Storage empty</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Persistent Block Store</div>
+                        </div>
+
+                        <!-- Inverted Index -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-violet flex items-center gap-1.5">
+                                    <i class="fa-solid fa-book"></i> Inverted Index
+                                </span>
+                                <span id="indexTermsBadge" class="text-[10px] text-slate-400">0 Terms</span>
+                            </div>
+                            <div id="simIndexList" class="space-y-1 min-h-[140px] max-h-[160px] overflow-y-auto text-[11px]">
+                                <div class="text-slate-500 text-center pt-10">Index empty</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Term &rarr; Log IDs</div>
+                        </div>
+
+                    </div>
+
+                    <!-- Search API & Dashboard Interface -->
+                    <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2 flex-wrap gap-2">
+                            <span class="text-xs font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-magnifying-glass text-brand-emerald"></i> Search API &amp; Dashboard Interface
+                            </span>
+                            <span class="text-[10px] text-slate-400 font-mono">Inverted Index Lookup Pipeline</span>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="simSearchKeyword" placeholder="Search by term (e.g. ERROR, TIMEOUT, DATABASE, AUTH)..." class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-emerald">
+                            <button id="btnExecuteSearch" class="px-5 py-2 rounded-lg bg-brand-violet hover:bg-violet-600 text-white font-bold text-xs whitespace-nowrap transition shadow-glow-violet">
+                                Query Search API
+                            </button>
+                        </div>
+
+                        <!-- Search Query Results -->
+                        <div id="simSearchResults" class="p-3 rounded-xl bg-slate-900 border border-slate-800 min-h-[80px] max-h-[140px] overflow-y-auto font-mono text-xs text-slate-300">
+                            <div class="text-slate-500 text-center pt-4">Enter a search keyword above to lookup records from the Inverted Index.</div>
+                        </div>
+                    </div>
+
+                    <!-- Real-time Metrics Trace Log -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <span class="text-slate-400 font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-brand-emerald"></i> Breakscale Lab Execution Trace &amp; Metrics
+                            </span>
+                            <span class="text-[10px] text-slate-500">Live Telemetry</span>
+                        </div>
+                        <div id="simTraceLog" class="min-h-[80px] max-h-[120px] overflow-y-auto space-y-1 text-slate-300">
+                            <div class="text-slate-500 italic">Breakscale Lab ready. Click 'Ingest Sample Batch' or 'Emit Log' to start flow.</div>
+                        </div>
+                    </div>
+
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">D</div>
+                <span class="text-slate-300 font-semibold">Distributed Log Aggregator &amp; Indexer</span>
+            </div>
+            <div class="text-slate-400">
+                Case Study 25 | Authors: Jeegnasa Makwana (68) &amp; Leena Chavan (69)
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: INTERACTIVE BREAKSCALE SIMULATOR & UI NAVIGATION -->
+    <script>
+        // --- 1. READING PROGRESS BAR & SCROLLSPY ---
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) {
+                    current = sec.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // --- 2. MOBILE TOC DRAWER ---
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // --- 3. LIVE SEARCH FILTER ---
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            if (val.length > 0) {
+                clearSearch.classList.remove('hidden');
+            } else {
+                clearSearch.classList.add('hidden');
+            }
+        });
+
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- 4. BREAKSCALE LIVE SYSTEM SIMULATOR ENGINE ---
+        class BreakscaleLogSimulator {
+            constructor() {
+                this.logIdCounter = 1001;
+                this.queue = [];
+                this.storage = []; // Stores { id, timestamp, level, source, message }
+                this.index = new Map(); // Term -> Set of log IDs
+                this.workers = [
+                    { id: 1, name: 'Worker 1', healthy: true, busy: '30%', processed: 0 },
+                    { id: 2, name: 'Worker 2', healthy: true, busy: '45%', processed: 0 },
+                    { id: 3, name: 'Worker 3', healthy: true, busy: '25%', processed: 0 }
+                ];
+                this.highLoadMode = false;
+                this.traceLogs = [];
+            }
+
+            logTrace(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let color = 'text-slate-300';
+                if (type === 'success') color = 'text-brand-emerald font-semibold';
+                if (type === 'warn') color = 'text-brand-amber';
+                if (type === 'error') color = 'text-brand-rose';
+                if (type === 'step') color = 'text-brand-indigo font-mono';
+
+                this.traceLogs.unshift(`<div class="${color}">[${time}] ${msg}</div>`);
+                if (this.traceLogs.length > 30) this.traceLogs.pop();
+                this.renderUI();
+            }
+
+            emitLog(level, source, message) {
+                if (!message) return this.logTrace('Error: Log message cannot be empty', 'error');
+                
+                const logRecord = {
+                    id: `LOG-${this.logIdCounter++}`,
+                    timestamp: new Date().toLocaleTimeString(),
+                    level: level || 'INFO',
+                    source: source || 'Server-1',
+                    message: message.trim()
+                };
+
+                this.queue.push(logRecord);
+                this.logTrace(`INGEST &rarr; Log Aggregator pushed ${logRecord.id} [${logRecord.level}] to Message Queue`, 'step');
+                
+                if (this.highLoadMode) {
+                    this.logTrace(`[HIGH LOAD ACTIVE] Queue backing up (${this.queue.length} pending). Latency rising!`, 'warn');
+                } else {
+                    setTimeout(() => this.processQueue(), 200);
+                }
+                this.renderUI();
+            }
+
+            processQueue() {
+                if (this.queue.length === 0) {
+                    return this.logTrace('Queue processing skipped: Queue is empty.', 'info');
+                }
+
+                const healthyWorkers = this.workers.filter(w => w.healthy);
+                if (healthyWorkers.length === 0) {
+                    return this.logTrace('ALL WORKERS FAILING! Queue cannot be processed (100% Error Rate).', 'error');
+                }
+
+                while (this.queue.length > 0) {
+                    const record = this.queue.shift();
+                    const worker = healthyWorkers[Math.floor(Math.random() * healthyWorkers.length)];
+                    worker.processed++;
+
+                    // Save to persistent storage
+                    this.storage.push(record);
+
+                    // Add terms to Inverted Index
+                    const words = record.message.toUpperCase().split(/\W+/).filter(w => w.length > 2);
+                    words.push(record.level.toUpperCase());
+                    words.push(record.source.toUpperCase());
+
+                    words.forEach(word => {
+                        if (!this.index.has(word)) {
+                            this.index.set(word, new Set());
+                        }
+                        this.index.get(word).add(record.id);
+                    });
+
+                    this.logTrace(`PROCESSED &rarr; ${worker.name} indexed ${record.id} into Persistent Storage & Inverted Index`, 'success');
+                }
+                this.renderUI();
+            }
+
+            toggleWorkerHealth(workerId) {
+                const w = this.workers.find(item => item.id === workerId);
+                if (w) {
+                    w.healthy = !w.healthy;
+                    if (!w.healthy) {
+                        this.logTrace(`FAULT INJECTED &rarr; ${w.name} status set to 100% ERROR RATE (Failing incoming tasks)`, 'error');
+                    } else {
+                        this.logTrace(`RECOVERY &rarr; ${w.name} health restored to 0% Error Rate`, 'success');
+                    }
+                    this.renderUI();
+                }
+            }
+
+            setWorkload(high) {
+                this.highLoadMode = high;
+                const badge = document.getElementById('simWorkloadBadge');
+                if (high) {
+                    badge.innerText = '2.3k req/s High Load';
+                    badge.className = 'text-[10px] px-2 py-0.5 rounded bg-brand-rose/20 text-brand-rose font-mono';
+                    this.logTrace('WORKLOAD MODIFIED &rarr; Offered Load increased to 2.3k req/s. Simulating queue accumulation...', 'warn');
+                    
+                    // Ingest batch to simulate surge
+                    for(let i=0; i<5; i++) {
+                        this.queue.push({
+                            id: `LOG-${this.logIdCounter++}`,
+                            timestamp: new Date().toLocaleTimeString(),
+                            level: 'WARN',
+                            source: 'Server-Cluster',
+                            message: `SURGE TRAFFIC EVENT PARSING OVERLOAD ${i+1}`
+                        });
+                    }
+                } else {
+                    badge.innerText = '170 req/s Normal';
+                    badge.className = 'text-[10px] px-2 py-0.5 rounded bg-brand-emerald/20 text-brand-emerald font-mono';
+                    this.logTrace('WORKLOAD MODIFIED &rarr; Offered Load restored to normal 170 req/s.', 'info');
+                    this.processQueue();
+                }
+                this.renderUI();
+            }
+
+            searchIndex(term) {
+                if (!term) return;
+                const cleanTerm = term.trim().toUpperCase();
+                this.logTrace(`SEARCH API QUERY &rarr; Looking up term '${cleanTerm}' in Inverted Index...`, 'step');
+
+                const resultsContainer = document.getElementById('simSearchResults');
+
+                if (!this.index.has(cleanTerm)) {
+                    resultsContainer.innerHTML = `<div class="text-brand-rose">No matches found in Inverted Index for term '${cleanTerm}'.</div>`;
+                    this.logTrace(`SEARCH API &rarr; Term '${cleanTerm}' NOT FOUND in index. (0ms lookup)`, 'error');
+                    return;
+                }
+
+                const matchingIds = Array.from(this.index.get(cleanTerm));
+                const matchingLogs = this.storage.filter(log => matchingIds.includes(log.id));
+
+                const latency = Math.floor(Math.random() * 15) + 35; // ~35-50ms P99
+                this.logTrace(`SEARCH API SUCCESS &rarr; Located ${matchingLogs.length} matching log records in ${latency}ms (Hit Index & Fetch EBS)`, 'success');
+
+                resultsContainer.innerHTML = `
+                    <div class="text-brand-emerald mb-2">Index Hit! Found ${matchingLogs.length} records matching term '${cleanTerm}' [Latency: ${latency}ms P99]:</div>
+                    <div class="space-y-1.5">
+                        ${matchingLogs.map(l => `
+                            <div class="p-2 rounded bg-slate-950 border border-slate-800 flex items-center justify-between text-[11px]">
+                                <div>
+                                    <span class="text-brand-indigo font-bold">${l.id}</span>
+                                    <span class="text-slate-400 mx-1">|</span>
+                                    <span class="text-slate-200">${l.message}</span>
+                                </div>
+                                <span class="text-[10px] px-1.5 py-0.5 rounded ${l.level==='ERROR'?'bg-rose-950 text-rose-300':'bg-slate-800 text-slate-300'}">${l.level}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            loadSampleBatch() {
+                this.emitLog('INFO', 'Auth-Service', 'User login successful for session 8829');
+                this.emitLog('WARN', 'Payment-Gateway', 'API Gateway timeout warning on response');
+                this.emitLog('ERROR', 'DB-Cluster', 'DATABASE CONNECTION TIMEOUT ERROR ON WRITE');
+                this.emitLog('ERROR', 'Auth-Service', 'INVALID AUTH TOKEN EXPIRED ERROR');
+                this.emitLog('INFO', 'App-Server-2', 'Background queue cleanup batch complete');
+                this.logTrace('Sample log batch ingested.', 'info');
+            }
+
+            reset() {
+                this.queue = [];
+                this.storage = [];
+                this.index.clear();
+                this.logIdCounter = 1001;
+                this.workers.forEach(w => { w.healthy = true; w.processed = 0; });
+                this.traceLogs = [];
+                document.getElementById('simSearchResults').innerHTML = '<div class="text-slate-500 text-center pt-4">Enter a search keyword above to lookup records from the Inverted Index.</div>';
+                this.logTrace('Breakscale simulator state cleared.', 'info');
+            }
+
+            renderUI() {
+                // Queue
+                document.getElementById('queueCountBadge').innerText = `${this.queue.length} Pending`;
+                const qList = document.getElementById('simQueueList');
+                if (this.queue.length === 0) {
+                    qList.innerHTML = `<div class="text-slate-500 text-center pt-10">Queue empty</div>`;
+                } else {
+                    qList.innerHTML = this.queue.map(item => `
+                        <div class="p-1.5 rounded bg-slate-800 border border-slate-700/60 flex items-center justify-between">
+                            <span class="text-brand-indigo font-bold">${item.id}</span>
+                            <span class="text-slate-300 truncate max-w-[120px]">${item.message}</span>
+                        </div>
+                    `).join('');
+                }
+
+                // Workers
+                const wList = document.getElementById('simWorkerStatusList');
+                wList.innerHTML = this.workers.map(w => `
+                    <div class="p-2 rounded bg-slate-800 border ${w.healthy ? 'border-slate-700' : 'border-rose-800/80 bg-rose-950/20'} space-y-1">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold ${w.healthy ? 'text-white' : 'text-brand-rose'}">${w.name}</span>
+                            <span class="text-[9px] px-1.5 py-0.5 rounded ${w.healthy ? 'bg-brand-emerald/20 text-brand-emerald' : 'bg-brand-rose/20 text-brand-rose'}">${w.healthy ? 'ONLINE' : '100% FAILING'}</span>
+                        </div>
+                        <div class="text-[10px] text-slate-400 flex items-center justify-between">
+                            <span>Done: ${w.processed} logs</span>
+                            <span>Util: ${w.healthy ? w.busy : '0/s'}</span>
+                        </div>
+                    </div>
+                `).join('');
+
+                // Storage
+                document.getElementById('storageCountBadge').innerText = `${this.storage.length} Records`;
+                const sList = document.getElementById('simStorageList');
+                if (this.storage.length === 0) {
+                    sList.innerHTML = `<div class="text-slate-500 text-center pt-10">Storage empty</div>`;
+                } else {
+                    sList.innerHTML = this.storage.map(item => `
+                        <div class="p-1.5 rounded bg-slate-800 border border-slate-700/60 flex items-center justify-between">
+                            <span class="text-brand-rose font-bold">${item.id}</span>
+                            <span class="text-slate-300 truncate max-w-[110px]">${item.message}</span>
+                        </div>
+                    `).join('');
+                }
+
+                // Inverted Index
+                document.getElementById('indexTermsBadge').innerText = `${this.index.size} Terms`;
+                const iList = document.getElementById('simIndexList');
+                if (this.index.size === 0) {
+                    iList.innerHTML = `<div class="text-slate-500 text-center pt-10">Index empty</div>`;
+                } else {
+                    const termsArray = Array.from(this.index.entries()).slice(0, 10);
+                    iList.innerHTML = termsArray.map(([term, ids]) => `
+                        <div class="p-1 rounded bg-slate-800/80 border border-slate-700/50 flex items-center justify-between text-[10px]">
+                            <span class="text-brand-violet font-bold">${term}</span>
+                            <span class="text-slate-400">${Array.from(ids).join(', ')}</span>
+                        </div>
+                    `).join('');
+                }
+
+                // Trace
+                document.getElementById('simTraceLog').innerHTML = this.traceLogs.join('');
+            }
+        }
+
+        // Initialize Simulator
+        const lab = new BreakscaleLogSimulator();
+
+        document.getElementById('btnEmitLog').addEventListener('click', () => {
+            const level = document.getElementById('simLogLevel').value;
+            const source = document.getElementById('simLogSource').value;
+            const msg = document.getElementById('simLogMsg').value;
+            lab.emitLog(level, source, msg);
+        });
+
+        document.getElementById('simProcessQueue').addEventListener('click', () => lab.processQueue());
+        document.getElementById('simLoadPreset').addEventListener('click', () => lab.loadSampleBatch());
+        document.getElementById('simReset').addEventListener('click', () => lab.reset());
+
+        document.getElementById('btnNormalLoad').addEventListener('click', () => lab.setWorkload(false));
+        document.getElementById('btnHighLoad').addEventListener('click', () => lab.setWorkload(true));
+
+        document.getElementById('toggleW1').addEventListener('click', (e) => {
+            lab.toggleWorkerHealth(1);
+            e.target.innerText = lab.workers[0].healthy ? 'W1: ONLINE' : 'W1: FAILING';
+            e.target.className = lab.workers[0].healthy ? 'py-1 px-2 rounded bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/40 font-mono font-bold' : 'py-1 px-2 rounded bg-brand-rose/20 text-brand-rose border border-brand-rose/40 font-mono font-bold';
+        });
+
+        document.getElementById('toggleW2').addEventListener('click', (e) => {
+            lab.toggleWorkerHealth(2);
+            e.target.innerText = lab.workers[1].healthy ? 'W2: ONLINE' : 'W2: FAILING';
+            e.target.className = lab.workers[1].healthy ? 'py-1 px-2 rounded bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/40 font-mono font-bold' : 'py-1 px-2 rounded bg-brand-rose/20 text-brand-rose border border-brand-rose/40 font-mono font-bold';
+        });
+
+        document.getElementById('toggleW3').addEventListener('click', (e) => {
+            lab.toggleWorkerHealth(3);
+            e.target.innerText = lab.workers[2].healthy ? 'W3: ONLINE' : 'W3: FAILING';
+            e.target.className = lab.workers[2].healthy ? 'py-1 px-2 rounded bg-brand-emerald/20 text-brand-emerald border border-brand-emerald/40 font-mono font-bold' : 'py-1 px-2 rounded bg-brand-rose/20 text-brand-rose border border-brand-rose/40 font-mono font-bold';
+        });
+
+        document.getElementById('btnExecuteSearch').addEventListener('click', () => {
+            const kw = document.getElementById('simSearchKeyword').value;
+            lab.searchIndex(kw);
+        });
+    </script>
+</body>
+</html>

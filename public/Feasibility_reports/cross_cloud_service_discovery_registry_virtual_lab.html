@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Feasibility report for the Cross-Cloud Service Discovery Registry virtual lab.">
+<title>Cross-Cloud Service Discovery Registry</title>
+<style>
+:root{--bg:#f4f7fb;--surface:#fff;--ink:#172338;--muted:#64748b;--line:#e4eaf2;--accent:#2563eb;--teal:#0f766e;--soft:#eff6ff;--shadow:0 12px 32px rgba(25,45,80,.07)}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.layout{max-width:1460px;margin:auto;display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;padding:28px}
+.sidebar{position:sticky;top:24px;align-self:start;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow)}
+.brand{font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.sidebar h2{font-size:17px;line-height:1.4;margin:0 0 18px}
+.nav{display:grid;gap:5px}.nav a{text-decoration:none;color:#53627a;padding:8px 10px;border-radius:9px;font-size:13px;font-weight:600}
+.nav a:hover{background:var(--soft);color:var(--accent)}.content{min-width:0}
+.hero{position:relative;overflow:hidden;background:linear-gradient(120deg,#10294e,#1d4f91 65%,#0f766e);color:#fff;border-radius:22px;padding:43px 44px;margin-bottom:22px;box-shadow:var(--shadow)}
+.hero:after{content:"";position:absolute;width:310px;height:310px;border:1px solid rgba(255,255,255,.16);border-radius:50%;right:-80px;top:-140px;box-shadow:0 0 0 35px rgba(255,255,255,.035),0 0 0 75px rgba(255,255,255,.025)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#bfdbfe;font-weight:800}
+.hero h1{font-size:clamp(28px,4vw,43px);line-height:1.12;max-width:900px;margin:12px 0}
+.hero p{color:#dbeafe;max-width:850px;margin:0;font-size:16px}
+.chip{display:inline-flex;margin-top:22px;padding:6px 11px;border:1px solid rgba(255,255,255,.25);border-radius:999px;font-size:12px;color:#e0f2fe}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:28px 30px;margin-bottom:18px;box-shadow:var(--shadow)}
+.section-head{display:flex;align-items:center;gap:13px;margin-bottom:16px}
+.num{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:11px;background:var(--soft);color:var(--accent);font-weight:800;font-size:13px}
+h2{font-size:21px;line-height:1.3;margin:0}h3{font-size:16px;margin:21px 0 8px}
+p{margin:10px 0;color:#475569}.lead{font-size:16px;color:#334155}
+ul,ol{padding-left:22px;color:#475569;margin:10px 0}li{padding:3px 0}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:16px}
+table{width:100%;border-collapse:collapse;min-width:620px;text-align:left}
+th{background:#f7f9fc;color:#52627a;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+th,td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}tr:last-child td{border-bottom:0}td{color:#405069;font-size:13px}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0;padding:14px;background:#f8fafc;border:1px solid var(--line);border-radius:12px}
+.flow span{background:#fff;border:1px solid #dbe5f1;border-radius:8px;padding:8px 11px;font-weight:700;color:#315078;font-size:13px}
+.flow b{color:var(--accent)}
+.note{background:#f0fdfa;border-left:3px solid var(--teal);padding:13px 16px;border-radius:0 10px 10px 0;color:#285b57;margin-top:16px}
+.conclusion{background:linear-gradient(120deg,#eff6ff,#f0fdfa);border:1px solid #d9e8f8}
+.footer{text-align:center;color:#8a97aa;font-size:12px;padding:10px 0 22px}
+@media(max-width:950px){.layout{grid-template-columns:1fr;padding:16px;gap:16px}.sidebar{position:static;padding:16px}.sidebar h2{margin-bottom:10px}.nav{display:flex;overflow-x:auto;padding-bottom:3px}.nav a{white-space:nowrap}.hero{padding:32px 26px}}
+@media(max-width:650px){.card{padding:21px 18px}.hero{border-radius:16px}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+ <div class="brand">Virtual Lab · Feasibility</div>
+ <h2>Cross-Cloud Service Discovery Registry</h2>
+ <nav class="nav" aria-label="Page sections">
+  <a href="#summary">Executive summary</a><a href="#problem">Problem &amp; objectives</a>
+  <a href="#scope">Scope &amp; assumptions</a><a href="#technical">Technical feasibility</a>
+  <a href="#registration">Registration flow</a><a href="#discovery">Discovery flow</a>
+  <a href="#operational">Operational feasibility</a><a href="#economic">Economic feasibility</a>
+  <a href="#reliability">Reliability &amp; security</a><a href="#performance">Performance &amp; scalability</a>
+  <a href="#risks">Risk assessment</a><a href="#evaluation">Evaluation plan</a>
+  <a href="#decision">Feasibility decision</a><a href="#implementation">Implementation plan</a>
+  <a href="#conclusion">Conclusion</a>
+ </nav>
+</aside>
+<main class="content">
+<header class="hero">
+ <div class="eyebrow">System Design · Feasibility Report</div>
+ <h1>Cross-Cloud Service Discovery Registry</h1>
+ <p>A common registry for registering service instances, discovering them by logical name, and observing their health across provider-labelled environments.</p>
+ <span class="chip">Node.js · Express · HashiCorp Consul · Health Checks</span>
+</header>
+
+<section class="card" id="summary">
+ <div class="section-head"><span class="num">01</span><h2>Executive Summary</h2></div>
+ <p class="lead">This report evaluates whether a Cross-Cloud Service Discovery Registry can be implemented and demonstrated as a System Design micro-project.</p>
+ <p>The system aims to provide a common place to register service instances, discover them by logical name, and observe their health regardless of the cloud-provider label associated with each instance.</p>
+ <p>The proposed prototype uses a browser-based dashboard, a Node.js/Express API, and HashiCorp Consul for the service catalog and health checks. A local payment-service process supplies a sample HTTP health endpoint. AWS, Azure, and GCP can be represented as provider metadata or simulated instances; such labels do not mean that real resources have been provisioned in those clouds.</p>
+ <div class="note"><strong>Feasibility finding:</strong> the core single-machine prototype is technically feasible with readily available tools and moderate implementation effort. Feasibility depends on validating registration, discovery, health status, error handling, and duplicate-free display behavior. Production-grade multi-region operation, secure cross-cloud networking, and high availability are outside the minimum prototype scope. No performance or completion claims are made without executed tests.</div>
+</section>
+
+<section class="card" id="problem">
+ <div class="section-head"><span class="num">02</span><h2>Problem Statement and Objectives</h2></div>
+ <h3>Problem Statement</h3>
+ <p class="lead">How can service instances associated with different cloud environments be registered and discovered through a common registry, while allowing applications and users to obtain current endpoint details and distinguish healthy services from unavailable ones without manually maintaining service addresses?</p>
+ <h3>Objectives</h3>
+ <ul>
+  <li>Provide a dashboard to register, list, search, and inspect service instances.</li>
+  <li>Store each service's logical name, unique instance ID, address, port, provider metadata, tags, and health-check configuration.</li>
+  <li>Use Consul APIs for actual service registration and discovery.</li>
+  <li>Expose backend API endpoints through Node.js and Express.</li>
+  <li>Monitor registered endpoints using Consul health checks.</li>
+  <li>Handle invalid input, unavailable Consul, missing services, and failed requests clearly.</li>
+  <li>Separate live registry entries from sample/demo rows and calculate counts correctly.</li>
+  <li>Document repeatable local setup and testing steps.</li>
+  <li>Keep simulated cloud-provider labels distinct from actual cloud deployment.</li>
+ </ul>
+</section>
+
+<section class="card" id="scope">
+ <div class="section-head"><span class="num">03</span><h2>Scope and Assumptions</h2></div>
+ <div class='table-wrap'><table><thead><tr><th>In scope for the proposed prototype</th><th>Out of scope / future work</th></tr></thead><tbody><tr><td>Single-machine local execution</td><td>Production multi-region Consul federation</td></tr><tr><td>Web frontend and Express REST API</td><td>Real infrastructure provisioning in AWS, Azure, or GCP</td></tr><tr><td>Consul service registration and lookup</td><td>Guaranteed high availability or automatic failover across clouds</td></tr><tr><td>HTTP health checks for sample services</td><td>Production identity, access control, and tenant isolation</td></tr><tr><td>Provider labels and simulated instances</td><td>Cross-cloud private networking and cloud-specific IAM</td></tr><tr><td>Manual testing and documented verification</td><td>Large-scale performance claims without benchmarks</td></tr></tbody></table></div>
+ <h3>Assumptions</h3>
+ <p>Node.js and npm are installed; Consul can run locally in development mode; the backend can reach the Consul HTTP API; and the sample service is reachable at its configured address and port. Localhost addresses are appropriate only for local demonstration and are not generally reachable from remote cloud hosts.</p>
+</section>
+
+<section class="card" id="technical">
+ <div class="section-head"><span class="num">04</span><h2>Technical Feasibility</h2></div>
+ <p class="lead">The project can be implemented with a small number of well-understood components.</p>
+ <p>The frontend sends HTTP requests to the Express API. The backend validates request data and communicates with Consul. Consul stores service definitions and evaluates configured checks. The dashboard renders the resulting catalog and health information.</p>
+ <div class='table-wrap'><table><thead><tr><th>Component</th><th>Proposed technology</th><th>Feasibility and key condition</th></tr></thead><tbody><tr><td>Frontend</td><td>HTML, CSS, JavaScript</td><td>High; API URLs and UI states must be consistent.</td></tr><tr><td>Backend API</td><td>Node.js + Express</td><td>High; validation, CORS, error responses, and route tests are required.</td></tr><tr><td>Service registry</td><td>HashiCorp Consul</td><td>High for local demonstration; Consul must be running and reachable.</td></tr><tr><td>Health check</td><td>HTTP endpoint such as /health</td><td>High; endpoint must be reachable from the Consul agent.</td></tr><tr><td>Sample service</td><td>Local payment-service process</td><td>High; current known endpoint is port 8001.</td></tr><tr><td>Provider representation</td><td>Service tags/metadata</td><td>High for simulation; metadata alone does not create real cloud resources.</td></tr><tr><td>Monitoring UI</td><td>Frontend health page and Consul UI</td><td>Moderate; status must be sourced from real API responses, not hardcoded labels.</td></tr></tbody></table></div>
+</section>
+
+<section class="card" id="registration">
+ <div class="section-head"><span class="num">05</span><h2>Proposed Service Registration Flow</h2></div>
+ <ol>
+  <li>The user enters service details in the registry form.</li>
+  <li>The browser sends a JSON request to <code>POST /api/services/register</code>.</li>
+  <li>The backend validates required fields and normalizes the health-check path, port, interval, timeout, and tags.</li>
+  <li>The backend calls Consul's service-registration API.</li>
+  <li>The backend returns success only if Consul accepts the registration; errors are returned with a useful message.</li>
+  <li>The frontend updates the table after confirmed success and avoids adding a false success row when the API fails.</li>
+ </ol>
+ <div class="flow"><span>Registry form</span><b>→</b><span>POST /api/services/register</span><b>→</b><span>Express validation</span><b>→</b><span>Consul registration</span><b>→</b><span>Confirmed UI update</span></div>
+</section>
+
+<section class="card" id="discovery">
+ <div class="section-head"><span class="num">06</span><h2>Proposed Service Discovery Flow</h2></div>
+ <ol start="7">
+  <li>The user searches for a service by logical name.</li>
+  <li>The frontend calls the backend discovery endpoint.</li>
+  <li>The backend queries Consul for matching instances.</li>
+  <li>The API returns instance IDs, addresses, ports, tags, and available health data.</li>
+  <li>The frontend displays the actual results or a clear empty/error state.</li>
+ </ol>
+ <div class="flow"><span>Search by logical name</span><b>→</b><span>Frontend</span><b>→</b><span>Backend discovery API</span><b>→</b><span>Consul lookup</span><b>→</b><span>Instance details &amp; health</span></div>
+</section>
+
+<section class="card" id="operational">
+ <div class="section-head"><span class="num">07</span><h2>Operational and Resource Feasibility</h2></div>
+ <p>The minimum prototype can run on a typical student laptop and does not require paid cloud infrastructure. The main operational requirement is to start and keep the local Consul agent, backend API, and sample service running during a demonstration.</p>
+ <div class='table-wrap'><table><thead><tr><th>Resource</th><th>Requirement / consideration</th></tr></thead><tbody><tr><td>Hardware</td><td>A standard laptop/desktop with enough memory and disk space for development tools.</td></tr><tr><td>Software</td><td>Node.js/npm, project dependencies, Consul executable, browser, and editor.</td></tr><tr><td>Network</td><td>Local ports 3000, 8001, and 8500 must be available and not blocked.</td></tr><tr><td>Maintenance</td><td>Manual startup, logs, and restart procedures are adequate for a prototype.</td></tr><tr><td>Team effort</td><td>A small team can divide frontend integration, API/Consul work, testing, and report preparation.</td></tr><tr><td>Cost</td><td>No paid cloud resource is necessary for the local simulation; production costs are not estimated.</td></tr></tbody></table></div>
+ <div class="note"><strong>Operational boundary:</strong> a local development Consul agent is suitable for learning and demonstration but is not a production cluster. Local endpoints should not be exposed publicly without appropriate security controls.</div>
+</section>
+
+<section class="card" id="economic">
+ <div class="section-head"><span class="num">08</span><h2>Economic Feasibility</h2></div>
+ <p>The project has low direct implementation cost because it uses open-source tools and local computing resources. The main costs are student development time, debugging, testing, and documentation. Actual cloud-cost savings cannot be estimated because the prototype does not deploy or measure real workloads across cloud providers.</p>
+ <div class='table-wrap'><table><thead><tr><th>Cost factor</th><th>Assessment</th></tr></thead><tbody><tr><td>Software licensing</td><td>Low for the listed open-source tools, subject to each tool&#x27;s license terms.</td></tr><tr><td>Infrastructure</td><td>Low for local-only testing; no cloud VM is required for the minimum demo.</td></tr><tr><td>Development effort</td><td>Moderate due to integration, health-check behavior, and frontend/backend consistency.</td></tr><tr><td>Ongoing operations</td><td>Low for manual classroom demonstration; substantially higher for secure production deployment.</td></tr><tr><td>Economic benefit</td><td>Potential operational benefit from centralized discovery, but no monetary savings are claimed.</td></tr></tbody></table></div>
+</section>
+
+<section class="card" id="reliability">
+ <div class="section-head"><span class="num">09</span><h2>Reliability, Consistency, and Security</h2></div>
+ <p>The most important reliability rule is that the UI must not report a service as successfully registered until the backend confirms the Consul operation. Registration acceptance and health-check passing are separate conditions. A service may be registered while its health check is failing.</p>
+ <div class='table-wrap'><table><thead><tr><th>Risk / failure scenario</th><th>Mitigation and verification</th></tr></thead><tbody><tr><td>Consul unavailable</td><td>Return a clear API error and show a frontend connection message.</td></tr><tr><td>Missing or malformed fields</td><td>Validate name, ID, address, port, path, and timing values before calling Consul.</td></tr><tr><td>Duplicate instance IDs</td><td>Use the service ID as a stable key and define an explicit duplicate/update policy.</td></tr><tr><td>Health endpoint fails</td><td>Display the real Consul check state; do not infer health from registration alone.</td></tr><tr><td>Stale or duplicate rows</td><td>Refresh from the live catalog and keep sample rows visibly separate.</td></tr><tr><td>Frontend CORS or network failure</td><td>Configure local CORS appropriately and show failed fetches clearly.</td></tr><tr><td>Untrusted service data</td><td>Escape or safely render text; do not inject raw user values into HTML.</td></tr><tr><td>Unauthorized access in production</td><td>Add authentication, Consul ACLs, TLS, and network restrictions before any production use.</td></tr></tbody></table></div>
+ <p>Security feasibility is high for a local classroom prototype with no sensitive data. Production use would require a separate security design, secrets management, authorization, encrypted communication, audit logging, and secure Consul configuration.</p>
+</section>
+
+<section class="card" id="performance">
+ <div class="section-head"><span class="num">10</span><h2>Performance and Scalability Feasibility</h2></div>
+ <p>The registry pattern can reduce hard-coded service addresses and centralize metadata lookup. However, this local prototype does not by itself prove performance under high request rates or availability across multiple regions. Consul's deployment topology, network latency, number of registered instances, health-check frequency, and backend request volume all influence behavior.</p>
+ <ul>
+  <li>Measure API response time and request success rate only after running repeatable tests.</li>
+  <li>Test lookup behavior with one instance and multiple instances sharing a logical service name.</li>
+  <li>Check that service health changes are reflected after the configured health-check interval.</li>
+  <li>Record observed results, environment, and test steps; do not invent throughput or latency numbers.</li>
+  <li>Treat real cloud networking, multi-region registry replication, and automatic failover as future evaluation items.</li>
+ </ul>
+</section>
+
+<section class="card" id="risks">
+ <div class="section-head"><span class="num">11</span><h2>Risk Assessment</h2></div>
+ <div class='table-wrap'><table><thead><tr><th>Risk</th><th>Likelihood / impact (qualitative)</th><th>Mitigation</th></tr></thead><tbody><tr><td>Incorrect or incomplete registration data</td><td>Medium / High</td><td>Input validation and API tests.</td></tr><tr><td>Consul not running during demo</td><td>Medium / High</td><td>Startup checklist and visible error handling.</td></tr><tr><td>False healthy status in UI</td><td>Medium / High</td><td>Read actual health-check results and distinguish registered from passing.</td></tr><tr><td>Duplicate service rows/count mismatch</td><td>Medium / Medium</td><td>Stable service IDs and one source of truth for live entries.</td></tr><tr><td>Port already in use</td><td>Medium / Medium</td><td>Check port availability and document configuration.</td></tr><tr><td>Local address used as a cloud endpoint</td><td>High / High if misrepresented</td><td>Label the setup as local simulation; use reachable addresses for remote instances.</td></tr><tr><td>Security gaps in production</td><td>High / High</td><td>Keep scope local and document required production safeguards.</td></tr><tr><td>Unverified performance claims</td><td>Medium / Medium</td><td>Only report measured results from repeatable tests.</td></tr></tbody></table></div>
+</section>
+
+<section class="card" id="evaluation">
+ <div class="section-head"><span class="num">12</span><h2>Evaluation Plan and Acceptance Criteria</h2></div>
+ <p>The following tests should be run against the final code. This table is a plan, not evidence that every test has already passed.</p>
+ <div class='table-wrap'><table><thead><tr><th>Test</th><th>Procedure</th><th>Pass criterion</th></tr></thead><tbody><tr><td>Backend startup</td><td>Run node server.js.</td><td>Server starts on configured port without fatal errors.</td></tr><tr><td>Consul availability</td><td>Open Consul UI or query the local agent API.</td><td>Consul responds to requests.</td></tr><tr><td>Sample health endpoint</td><td>Request http://127.0.0.1:8001/health.</td><td>Expected health JSON is returned while the service is running.</td></tr><tr><td>Service registration</td><td>Submit valid service details in the form.</td><td>API confirms registration and service appears in Consul.</td></tr><tr><td>Validation</td><td>Submit missing/invalid required fields.</td><td>Request is rejected and no false success row appears.</td></tr><tr><td>Service discovery</td><td>Search for a registered service.</td><td>Matching instance details are returned from Consul.</td></tr><tr><td>Health monitoring</td><td>Inspect the service check in Consul and dashboard.</td><td>Displayed state matches the actual check result.</td></tr><tr><td>Duplicate handling</td><td>Refresh catalog and register an existing ID.</td><td>No duplicate display row; behavior follows documented policy.</td></tr><tr><td>Consul/backend failure</td><td>Stop a dependency during a controlled test.</td><td>Useful error appears instead of fabricated data.</td></tr><tr><td>Multiple instances</td><td>Register two distinct IDs with the same logical name.</td><td>Discovery returns both matching instances where configured.</td></tr></tbody></table></div>
+</section>
+
+<section class="card conclusion" id="decision">
+ <div class="section-head"><span class="num">13</span><h2>Feasibility Decision</h2></div>
+ <p class="lead"><strong>Decision: GO for a bounded local academic prototype.</strong></p>
+ <p>Technical feasibility is high because the core tools are available and the workflow is straightforward. Operational feasibility is moderate because the demo depends on several local processes and careful startup order. Economic feasibility is high for the local prototype because paid infrastructure is unnecessary. Production feasibility is not established by this report.</p>
+ <p>The GO decision is conditional on passing the core acceptance tests: registration through the backend, discovery from Consul, accurate health status, correct error handling, and duplicate-free frontend rendering. If these tests fail, the project should be described as in progress until fixes are verified.</p>
+</section>
+
+<section class="card" id="implementation">
+ <div class="section-head"><span class="num">14</span><h2>Implementation Plan</h2></div>
+ <div class='table-wrap'><table><thead><tr><th>Stage</th><th>Work</th><th>Evidence to retain</th></tr></thead><tbody><tr><td>1. Inspect</td><td>Review frontend files, server.js, payment-service.js, and package configuration.</td><td>Component inventory and route list.</td></tr><tr><td>2. Integrate</td><td>Connect registration, listing, discovery, and health pages to actual API responses.</td><td>Screenshots and API response samples.</td></tr><tr><td>3. Validate</td><td>Test malformed input, missing service, duplicate ID, and dependency outages.</td><td>Test outcomes and error examples.</td></tr><tr><td>4. Verify</td><td>Check Consul catalog and health state against the dashboard.</td><td>Consul UI and dashboard screenshots.</td></tr><tr><td>5. Document</td><td>Update README with reproducible local demo and troubleshooting instructions.</td><td>Reproducible local demo steps.</td></tr></tbody></table></div>
+</section>
+
+<section class="card conclusion" id="conclusion">
+ <div class="section-head"><span class="num">15</span><h2>Conclusion</h2></div>
+ <p class="lead">The Cross-Cloud Service Discovery Registry is feasible as a System Design micro-project when scoped as a local prototype that demonstrates registration, discovery, and health monitoring through Consul.</p>
+ <p>The proposed architecture is affordable and implementable with common tools, while its most important risks—false health claims, duplicate data, and dependency failures—can be addressed through validation and repeatable tests.</p>
+ <p>The report intentionally separates planned capabilities from verified behavior. A passing final assessment should be based on observed test results rather than the presence of code or a successful startup message alone. Real cross-cloud deployment, high availability, security hardening, and production-scale performance remain outside the conclusions of this feasibility study.</p>
+</section>
+
+<div class="footer">Cross-Cloud Service Discovery Registry · Virtual Lab · Feasibility Report</div>
+</main>
+</div>
+</body>
+</html>

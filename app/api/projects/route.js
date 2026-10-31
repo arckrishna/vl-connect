@@ -57,10 +57,17 @@ export async function GET(request) {
           virtualLab = rawMatch.virtualLab;
         }
 
-        let architecture = row.architecture || rawMatch?.architecture || "";
-        if (rawMatch?.architecture && (!architecture || architecture.includes("1Vk6XvulD0rJfJaQTzs5rRWz8ltBxa8W7"))) {
-          architecture = rawMatch.architecture;
-        }
+        const architecture = (rawMatch?.architecture && (rawMatch.architecture.startsWith("/architecture/") || rawMatch.architecture.startsWith("/Architcture diagram/")))
+          ? rawMatch.architecture
+          : (row.architecture || rawMatch?.architecture || "");
+
+        const report = (rawMatch?.report && rawMatch.report.startsWith("/reports/"))
+          ? rawMatch.report
+          : (row.report || rawMatch?.report || "");
+
+        const feasibility = (rawMatch?.feasibility && rawMatch.feasibility.startsWith("/Feasibility_reports/"))
+          ? rawMatch.feasibility
+          : (row.feasibility || rawMatch?.feasibility || "");
 
         return {
           group: String(row.original_group || row.group_number),
@@ -69,9 +76,9 @@ export async function GET(request) {
           student1: student1 || rawMatch?.student1 || "",
           student2: student2 || rawMatch?.student2 || "",
           virtualLab: virtualLab || rawMatch?.virtualLab || "",
-          feasibility: row.feasibility || rawMatch?.feasibility || "",
+          feasibility: feasibility,
           architecture: architecture,
-          report: row.report || rawMatch?.report || "",
+          report: report,
           mentor: row.mentor || "Department of Computer Engineering",
         };
       });

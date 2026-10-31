@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resilient Distributed DAG Orchestrator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.3)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+
+      .search-highlight {
+        background-color: rgba(245, 158, 11, 0.35);
+        color: #FDE68A;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    O
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Resilient Distributed DAG Orchestrator
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">ORBIT Engine</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Advanced Cloud Systems Architecture Report</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Simulator Jump Button -->
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">DAG Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Overview & Header</a>
+                            <a href="#abstract" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Abstract & Scope</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Introduction & Problem</a>
+                            <a href="#related-work" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Related Work & Gap</a>
+                            <a href="#requirements" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Requirements & Model</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. System Architecture</a>
+                            <a href="#detailed-design" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Detailed Design & Model</a>
+                            <a href="#correctness" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Consistency & Guarantees</a>
+                            <a href="#failure-strategy" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Failure & Recovery Edge</a>
+                            <a href="#operations" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Security & Observability</a>
+                            <a href="#validation" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">10. Validation & Testing Plan</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 11. Interactive Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Author Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Publication Info</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Course Guide</span>
+                                <span class="text-slate-200 font-semibold">Mrs. Priya R.L.</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Engineering Team (Group 07)</span>
+                                <span class="text-slate-200 font-medium block">Sahil Mirchandani (Roll 37)</span>
+                                <span class="text-slate-200 font-medium block">James Lijo (Roll 28)</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Institution: VESIT Mumbai</span>
+                                <span class="text-brand-indigo font-mono">D12A / Cloud</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">0. Header & Authors</a>
+                        <a href="#abstract" class="mobile-toc-link block py-2 text-slate-300">1. Abstract & Scope</a>
+                        <a href="#introduction" class="mobile-toc-link block py-2 text-slate-300">2. Introduction & Problem</a>
+                        <a href="#related-work" class="mobile-toc-link block py-2 text-slate-300">3. Related Work</a>
+                        <a href="#requirements" class="mobile-toc-link block py-2 text-slate-300">4. Requirements & Model</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">5. System Architecture</a>
+                        <a href="#detailed-design" class="mobile-toc-link block py-2 text-slate-300">6. Detailed Design</a>
+                        <a href="#correctness" class="mobile-toc-link block py-2 text-slate-300">7. Consistency & Guarantees</a>
+                        <a href="#failure-strategy" class="mobile-toc-link block py-2 text-slate-300">8. Failure Handling</a>
+                        <a href="#operations" class="mobile-toc-link block py-2 text-slate-300">9. Security & Observability</a>
+                        <a href="#validation" class="mobile-toc-link block py-2 text-slate-300">10. Validation Plan</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">11. Interactive Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-sitemap"></i> Continuous Assessment Report (CA1)
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Advanced Cloud System Software Design
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Group 07 • VESIT
+                            </span>
+                        </div>
+
+                        <!-- Paper Title -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Resilient Distributed <span class="gradient-text">DAG Orchestrator</span>
+                        </h1>
+
+                        <!-- Subtitle / Meta Summary -->
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            ORBIT turns raw cloud queues and autoscaling worker fleets into dependency-aware, crash-resilient workflow engines using Write-Ahead Logging (WAL), transactional outbox patterns, and epoch fencing.
+                        </p>
+
+                        <!-- Authors & Details Grid -->
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Course Guide</span>
+                                <span class="text-white font-bold text-sm">Mrs. Priya R.L.</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Authors / Group 07</span>
+                                <span class="text-white font-semibold">Sahil Mirchandani (37)</span>
+                                <span class="text-slate-400 mx-1">•</span>
+                                <span class="text-white font-semibold">James Lijo (28)</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Core Mechanisms</span>
+                                <span class="text-slate-300">WAL • Outbox Relay • Idempotency • Epoch Fencing</span>
+                            </div>
+                        </div>
+
+                        <!-- Hero Action Controls -->
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Live Orchestrator Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> System Architecture View
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. ABSTRACT & ABBREVIATIONS -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Abstract & Scope</h2>
+                            <p class="text-xs text-slate-400">Executive summary, design targets, and terms</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The <strong class="text-white">Resilient Distributed DAG Orchestrator (ORBIT)</strong> turns a raw cloud queue and an auto-scaling worker fleet into a dependency-aware workflow engine. A control plane tracks every DAG and every task as an explicit state machine, records each transition in a write-ahead log (WAL), and recovers from crashes by replaying that log from the last checkpoint. Workers are stateless and idempotent, so the queue's at-least-once delivery yields effectively-once task effects.
+                        </p>
+                        <p>
+                            The design targets three primary guarantees: crash recovery of workers and the control plane, at-least-once execution with idempotent replay, and linearizable reads of DAG status. This is a Phase 1 architectural design report specifying requirements, architecture, data model, state machine, control pathways, failure handling, security, and a validation plan. The guarantees are design targets to be demonstrated by Phase 2 implementation and fault injection tests.
+                        </p>
+                    </div>
+
+                    <!-- Abbreviations Table -->
+                    <div class="space-y-3 pt-2">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">System Terminology & Abbreviations</h3>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 text-xs font-mono">
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-brand-indigo font-bold">DAG:</span> Directed Acyclic Graph</div>
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-brand-violet font-bold">WAL:</span> Write-Ahead Log</div>
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-brand-emerald font-bold">LSN:</span> Log Sequence Number</div>
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-brand-cyan font-bold">DLQ:</span> Dead-Letter Queue</div>
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-brand-amber font-bold">TTL:</span> Time To Live (Lease)</div>
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-brand-rose font-bold">VPC:</span> Virtual Private Cloud</div>
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-slate-200 font-bold">SQS / PubSub:</span> Raw Queue Layer</div>
+                            <div class="p-2.5 rounded-xl bg-slate-900/60 border border-slate-800"><span class="text-slate-200 font-bold">MVP:</span> Minimum Viable Product</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. INTRODUCTION & PROBLEM STATEMENT -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Introduction & Objectives</h2>
+                            <p class="text-xs text-slate-400">Background, problem statement, and project scope</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            Cloud queues such as SQS and Pub/Sub deliver messages, and auto-scaling groups add compute, but neither understands task dependencies, ordering, or partial failure. A pipeline that simply fires tasks onto a queue cannot tell when a downstream task is safe to start, cannot resume correctly after a crash in the middle of a DAG, and offers no consistent view of where a workflow stands. Typical uses are data pipelines, build and release workflows, batch ML jobs, and multi-step processing.
+                        </p>
+                    </div>
+
+                    <!-- Problem Statement Box -->
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-indigo/10 via-brand-violet/10 to-transparent border border-brand-indigo/30 space-y-2">
+                        <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-question"></i> Problem Statement
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            "How can unordered, independently retryable queue messages be turned into a resumable, dependency-aware workflow engine that survives worker and control-plane crashes without silently losing or double-applying work?"
+                        </p>
+                    </div>
+
+                    <!-- Objectives Grid -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-bullseye text-brand-emerald"></i> Primary Objectives
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <span class="font-mono text-brand-indigo font-bold">01.</span>
+                                <div><strong class="text-white block">Dependency Execution:</strong> Release tasks only after all upstream dependencies have SUCCEEDED or SKIPPED.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <span class="font-mono text-brand-indigo font-bold">02.</span>
+                                <div><strong class="text-white block">Durable State Machine:</strong> Track every DAG and task through explicit state transitions persisted durably.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <span class="font-mono text-brand-indigo font-bold">03.</span>
+                                <div><strong class="text-white block">Deterministic WAL Recovery:</strong> Rebuild control-plane state from log replays starting from the last checkpoint.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <span class="font-mono text-brand-indigo font-bold">04.</span>
+                                <div><strong class="text-white block">Lease & Failure Detection:</strong> Detect dead workers via heartbeat/lease expiration and safely reschedule tasks.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <span class="font-mono text-brand-indigo font-bold">05.</span>
+                                <div><strong class="text-white block">Effectively-Once Processing:</strong> Combine at-least-once message queues with worker idempotency keys.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <span class="font-mono text-brand-indigo font-bold">06.</span>
+                                <div><strong class="text-white block">Linearizable Status Reads:</strong> Serve workflow progress queries from a strongly consistent database.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. RELATED WORK & GAP ANALYSIS -->
+                <section id="related-work" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Related Work & Gap Analysis</h2>
+                            <p class="text-xs text-slate-400">Positioning against Airflow, Temporal, Step Functions, and Celery</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">System</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Execution Model</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Relevance & Gap Addressed</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Apache Airflow</td>
+                                    <td class="px-4 py-3 text-slate-400">Python DAGs; scheduler persists state in a metadata DB.</td>
+                                    <td class="px-4 py-3 text-slate-300">Closest in metadata model; designed around scheduled batch jobs rather than a deterministic replay log.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Temporal / Cadence</td>
+                                    <td class="px-4 py-3 text-slate-400">Durable execution: workflow progress rebuilds via deterministic replay.</td>
+                                    <td class="px-4 py-3 text-slate-300">Closest in recovery concept; our pure transition function applies replay directly to task graphs.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">AWS Step Functions</td>
+                                    <td class="px-4 py-3 text-slate-400">Managed state machines (Standard vs Express workflows).</td>
+                                    <td class="px-4 py-3 text-slate-300">Shows managed alternative; ties users to single cloud vendors and specific state machine JSON formats.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Celery (Canvas)</td>
+                                    <td class="px-4 py-3 text-slate-400">Task library over standard message brokers.</td>
+                                    <td class="px-4 py-3 text-slate-300">Provides dependency primitives, but recovery guarantees depend on fragile broker configurations.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 4. REQUIREMENTS & FAILURE MODEL -->
+                <section id="requirements" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. Requirements & System Stack</h2>
+                            <p class="text-xs text-slate-400">Functional specs, technology mapping, and environmental constraints</p>
+                        </div>
+                    </div>
+
+                    <!-- Tech Stack Mapping Grid -->
+                    <div class="space-y-3">
+                        <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Proposed System Technology Stack</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-[10px] text-brand-indigo font-mono font-bold block uppercase">Task Queue</span>
+                                <span class="text-white font-bold text-sm block">Amazon SQS / Google PubSub</span>
+                                <span class="text-slate-400">At-least-once unordered delivery</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-[10px] text-brand-violet font-mono font-bold block uppercase">Control Plane</span>
+                                <span class="text-white font-bold text-sm block">Node.js / Python Service</span>
+                                <span class="text-slate-400">Leader-elected, epoch-fenced</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-[10px] text-brand-emerald font-mono font-bold block uppercase">Metadata Store</span>
+                                <span class="text-white font-bold text-sm block">PostgreSQL / DynamoDB</span>
+                                <span class="text-slate-400">Strongly consistent transactions</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-[10px] text-brand-cyan font-mono font-bold block uppercase">Leader Election</span>
+                                <span class="text-white font-bold text-sm block">etcd / ZooKeeper / Lease</span>
+                                <span class="text-slate-400">Epoch fencing token generator</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-[10px] text-brand-amber font-mono font-bold block uppercase">Write-Ahead Log</span>
+                                <span class="text-white font-bold text-sm block">Append-Only Table / Kafka</span>
+                                <span class="text-slate-400">Monotonic LSN log transitions</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <span class="text-[10px] text-brand-rose font-mono font-bold uppercase block">Checkpoint Store</span>
+                                <span class="text-white font-bold text-sm block">Amazon S3 / Google GCS</span>
+                                <span class="text-slate-400">Durable output artifact storage</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. SYSTEM ARCHITECTURE (PRESERVED DIAGRAMS) -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                                05
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white">5. System Architecture</h2>
+                                <p class="text-xs text-slate-400">4 Layers, 12 core components, and network isolation topology</p>
+                            </div>
+                        </div>
+
+                        <!-- Architecture Tabs -->
+                        <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                            <button class="arch-tab px-3 py-1.5 rounded-lg active font-semibold text-white bg-brand-indigo transition" data-tab="topology">
+                                Layered System Diagram
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="outbox">
+                                Transactional Outbox Flow
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="fencing">
+                                Epoch Fencing & Leases
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Diagram Canvas Container -->
+                    <div class="bg-slate-950/80 p-6 rounded-2xl border border-slate-800 min-h-[420px] flex items-center justify-center">
+
+                        <!-- TAB 1: SYSTEM ARCHITECTURE DIAGRAM -->
+                        <div id="arch-topology" class="arch-pane w-full space-y-6">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider">Figure 1 — Layered Topology (4 Layers, 12 Components)</span>
+                                <p class="text-xs text-slate-400">Only the control plane enqueues work; workers stay completely stateless</p>
+                            </div>
+
+                            <!-- Architecture Layer Boxes -->
+                            <div class="space-y-4 text-xs">
+                                <!-- Layer 1: Edge -->
+                                <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-blue-500/30 space-y-2">
+                                    <div class="flex items-center justify-between text-[11px] font-bold text-blue-400 uppercase">
+                                        <span>Layer 1: Public Edge (Sole Ingress)</span>
+                                        <i class="fa-solid fa-network-wired"></i>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white">
+                                            API Gateway <span class="text-[10px] text-slate-400 block">TLS, Auth, Schema, Cycle Checks</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white">
+                                            Client Application <span class="text-[10px] text-slate-400 block">Submits DAGs, Polls Status</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Layer 2: Control Plane -->
+                                <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-brand-indigo/40 space-y-2">
+                                    <div class="flex items-center justify-between text-[11px] font-bold text-brand-indigo uppercase">
+                                        <span>Layer 2: Control Plane (Leader-Elected)</span>
+                                        <i class="fa-solid fa-microchip"></i>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white text-center">
+                                            Orchestrator <span class="text-[10px] text-slate-400 block">State Machine & Scheduler</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white text-center">
+                                            Outbox Relay <span class="text-[10px] text-slate-400 block">Publishes Ready Tasks</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white text-center">
+                                            Standby Replicas <span class="text-[10px] text-slate-400 block">Promoted on Leader Loss</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Layer 3: Raw Primitives -->
+                                <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-brand-amber/40 space-y-2">
+                                    <div class="flex items-center justify-between text-[11px] font-bold text-brand-amber uppercase">
+                                        <span>Layer 3: Raw Cloud Primitives (Untrusted for Ordering)</span>
+                                        <i class="fa-solid fa-cubes"></i>
+                                    </div>
+                                    <div class="grid grid-cols-3 gap-3">
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white text-center">
+                                            Task Queue (SQS) <span class="text-[10px] text-slate-400 block">At-least-once delivery</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white text-center">
+                                            Completion Event Queue <span class="text-[10px] text-slate-400 block">Worker feedback channel</span>
+                                        </div>
+                                        <div class="p-2.5 rounded-xl bg-slate-800 border border-slate-700 font-medium text-white text-center">
+                                            Dead-Letter Queue (DLQ) <span class="text-[10px] text-slate-400 block">Poison message sink</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Layer 4: Data Plane & Storage -->
+                                <div class="p-3.5 rounded-2xl bg-slate-900/80 border border-brand-emerald/40 space-y-2">
+                                    <div class="flex items-center justify-between text-[11px] font-bold text-brand-emerald uppercase">
+                                        <span>Layer 4: Data Plane & Durable Storage</span>
+                                        <i class="fa-solid fa-database"></i>
+                                    </div>
+                                    <div class="grid grid-cols-4 gap-2">
+                                        <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 text-center text-white">
+                                            State Store & WAL
+                                        </div>
+                                        <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 text-center text-white">
+                                            Worker Fleet
+                                        </div>
+                                        <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 text-center text-white">
+                                            Health Monitor
+                                        </div>
+                                        <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 text-center text-white">
+                                            Checkpoint Store
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: TRANSACTIONAL OUTBOX FLOW -->
+                        <div id="arch-outbox" class="arch-pane hidden w-full space-y-4 text-xs">
+                            <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider block text-center">Transactional Outbox Pattern Pipeline</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">1</div>
+                                    <div class="font-bold text-white">State & Outbox Transaction</div>
+                                    <div class="text-[11px] text-slate-400">Control plane updates DAG status, writes WAL entry, and inserts outbox row in 1 atomic DB transaction.</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">2</div>
+                                    <div class="font-bold text-white">Outbox Relay Poll</div>
+                                    <div class="text-[11px] text-slate-400">Asynchronous Outbox Relay reads unsent task rows from database outbox table.</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">3</div>
+                                    <div class="font-bold text-white">Queue Publish</div>
+                                    <div class="text-[11px] text-slate-400">Relay publishes message to SQS/PubSub with task ID and fencing epoch token.</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-emerald/20 text-brand-emerald font-bold mx-auto flex items-center justify-center">4</div>
+                                    <div class="font-bold text-white">Mark Row Sent</div>
+                                    <div class="text-[11px] text-slate-400">Relay marks outbox row as sent. Crash between 3 & 4 results in safe retry absorbed by idempotency.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: FENCING & LEASES -->
+                        <div id="arch-fencing" class="arch-pane hidden w-full space-y-4 text-xs">
+                            <span class="text-xs font-bold text-brand-violet uppercase tracking-wider block text-center">Epoch Fencing Tokens & Single Lease Authority</span>
+                            <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+                                <p class="text-slate-300">
+                                    To prevent split-brain updates from a zombie or deposed leader, every leader election increments a monotonic <code class="text-brand-violet">epoch</code> counter. The State Store rejects any write carrying an epoch lower than the current active token.
+                                </p>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                                    <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                                        <strong class="text-brand-indigo block mb-1">Leader Fencing Guard</strong>
+                                        <code>assert store.leader.epoch == my_epoch</code>
+                                    </div>
+                                    <div class="p-3 rounded-lg bg-slate-950 border border-slate-800">
+                                        <strong class="text-brand-emerald block mb-1">Single Lease Authority</strong>
+                                        <span>Task leases reside exclusively in the State Store; worker heartbeats renew the lease prior to TTL expiry.</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. DETAILED DESIGN & DATA MODEL -->
+                <section id="detailed-design" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-8">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. Detailed System Design</h2>
+                            <p class="text-xs text-slate-400">Data model, explicit state machine transitions, and API contracts</p>
+                        </div>
+                    </div>
+
+                    <!-- 6.1 State Machine Table -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-arrows-spin text-brand-indigo"></i> 6.1 Task State Machine Lifecycle Transitions
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-3 py-2 border-b border-slate-800">From</th>
+                                        <th class="px-3 py-2 border-b border-slate-800">Trigger</th>
+                                        <th class="px-3 py-2 border-b border-slate-800">To</th>
+                                        <th class="px-3 py-2 border-b border-slate-800">Guard and Side Effect</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono text-[11px]">
+                                    <tr>
+                                        <td class="px-3 py-2 text-brand-indigo font-bold">PENDING</td>
+                                        <td class="px-3 py-2 text-slate-300">Dependencies SUCCEEDED/SKIPPED</td>
+                                        <td class="px-3 py-2 text-brand-emerald font-bold">READY</td>
+                                        <td class="px-3 py-2 text-slate-400">Insert outbox row in same transaction</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 text-brand-emerald font-bold">READY</td>
+                                        <td class="px-3 py-2 text-slate-300">Worker takes lease</td>
+                                        <td class="px-3 py-2 text-brand-violet font-bold">RUNNING</td>
+                                        <td class="px-3 py-2 text-slate-400">Record lease owner & expiry; increment attempts</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 text-brand-violet font-bold">RUNNING</td>
+                                        <td class="px-3 py-2 text-slate-300">Success event, key new</td>
+                                        <td class="px-3 py-2 text-brand-emerald font-bold">SUCCEEDED</td>
+                                        <td class="px-3 py-2 text-slate-400">Write idempotency row; evaluate dependents</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 text-brand-violet font-bold">RUNNING</td>
+                                        <td class="px-3 py-2 text-slate-300">Failure or lease expiry (attempts left)</td>
+                                        <td class="px-3 py-2 text-brand-amber font-bold">RETRYING</td>
+                                        <td class="px-3 py-2 text-slate-400">Schedule next_run_at with exponential backoff</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 text-brand-violet font-bold">RUNNING</td>
+                                        <td class="px-3 py-2 text-slate-300">Failure or lease expiry (no attempts)</td>
+                                        <td class="px-3 py-2 text-brand-rose font-bold">DEAD_LETTERED</td>
+                                        <td class="px-3 py-2 text-slate-400">DLQ payload; mark dependents BLOCKED</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 text-brand-rose font-bold">DEAD_LETTERED</td>
+                                        <td class="px-3 py-2 text-slate-300">Operator requeue</td>
+                                        <td class="px-3 py-2 text-brand-emerald font-bold">READY</td>
+                                        <td class="px-3 py-2 text-slate-400">Reset attempts; return dependents to PENDING</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-3 py-2 text-brand-rose font-bold">DEAD_LETTERED</td>
+                                        <td class="px-3 py-2 text-slate-300">Operator skip</td>
+                                        <td class="px-3 py-2 text-brand-cyan font-bold">SKIPPED</td>
+                                        <td class="px-3 py-2 text-slate-400">Log WAL override; dependents treat as satisfied</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. CONSISTENCY & CORRECTNESS -->
+                <section id="correctness" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Consistency & Correctness</h2>
+                            <p class="text-xs text-slate-400">Safety mechanisms closing raw queue concurrency gaps</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-key text-brand-indigo"></i> Transactional Outbox Pattern
+                            </h4>
+                            <p class="text-slate-400">State change, WAL record, and message outbox write commit in a single database transaction. Eliminates discrepancies between store state and queue messages.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-shield text-brand-violet"></i> Monotonic Epoch Fencing
+                            </h4>
+                            <p class="text-slate-400">Leader promotion increments an epoch counter. Any write bearing a stale epoch is atomically rejected by the State Store.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-fingerprint text-brand-emerald"></i> Stable Idempotency Keys
+                            </h4>
+                            <p class="text-slate-400">Task outputs are hashed by <code class="text-brand-emerald">task_id + input_hash</code>. Redelivered messages hit the deduplication table and are discarded before scheduling downstream tasks.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-calculator text-brand-cyan"></i> Pure Transition Function
+                            </h4>
+                            <p class="text-slate-400">State recovery replays log events using recorded timestamps and backoff jitter saved inside WAL entries, maintaining complete determinism.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. FAILURE & EDGE CASE STRATEGY -->
+                <section id="failure-strategy" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Failure & Edge-Case Handling</h2>
+                            <p class="text-xs text-slate-400">Fault tolerance matrix across infrastructure failures</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-3 py-2 border-b border-slate-800">Scenario</th>
+                                    <th class="px-3 py-2 border-b border-slate-800">Detection</th>
+                                    <th class="px-3 py-2 border-b border-slate-800">System Response</th>
+                                    <th class="px-3 py-2 border-b border-slate-800">Data & Safety Impact</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-3 py-2 font-semibold text-white">Worker crash mid-task</td>
+                                    <td class="px-3 py-2 text-slate-400">Missed heartbeat / Lease TTL expiry (30s)</td>
+                                    <td class="px-3 py-2 text-slate-300">Lease revoked; task returned to READY & re-enqueued.</td>
+                                    <td class="px-3 py-2 text-brand-emerald">No data loss; task re-executes idempotently.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2 font-semibold text-white">Control-Plane crash</td>
+                                    <td class="px-3 py-2 text-slate-400">Lost leader lease / Liveness probe failure</td>
+                                    <td class="px-3 py-2 text-slate-300">Standby promoted under new epoch; replays WAL from last checkpoint.</td>
+                                    <td class="px-3 py-2 text-brand-emerald">No state loss; rebuilt state equals pre-crash state.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2 font-semibold text-white">Deposed leader write attempt</td>
+                                    <td class="px-3 py-2 text-slate-400">Stale epoch on write transaction</td>
+                                    <td class="px-3 py-2 text-slate-300">State store rejects transaction write.</td>
+                                    <td class="px-3 py-2 text-brand-emerald">No split-brain updates possible.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-3 py-2 font-semibold text-white">Poison Task (Exhaustive Retries)</td>
+                                    <td class="px-3 py-2 text-slate-400">Attempt count exceeds max_attempts</td>
+                                    <td class="px-3 py-2 text-slate-300">Moved to DLQ; dependents marked BLOCKED.</td>
+                                    <td class="px-3 py-2 text-brand-amber">Isolated; requires operator requeue/skip.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 9. SECURITY & OBSERVABILITY -->
+                <section id="operations" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Security, Observability & Operations</h2>
+                            <p class="text-xs text-slate-400">Threat model, structured metrics, and runbooks</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-lock text-brand-indigo"></i> Least-Privilege IAM
+                            </h4>
+                            <p class="text-slate-400">Workers can only take/renew task leases and publish event messages. They have no direct access to alter DAG state tables.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-chart-line text-brand-violet"></i> Structured Observability
+                            </h4>
+                            <p class="text-slate-400">Log entries contain structured JSON carrying <code class="text-brand-violet">dag_id, task_id, attempt_id, epoch, LSN</code> for unified tracing.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-user-shield text-brand-emerald"></i> Operator Overrides
+                            </h4>
+                            <p class="text-slate-400">BLOCKED DAGs can be manually requeued, skipped, or cancelled. Every operator override records identity and reason in the WAL.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 10. VALIDATION & TESTING PLAN -->
+                <section id="validation" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            10
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">10. Validation & Testing Plan</h2>
+                            <p class="text-xs text-slate-400">Automated fault-injection harness and benchmark suite</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-bug text-brand-rose mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Worker Kill Injection:</strong> Terminate workers mid-execution to verify lease revocation and exact single execution.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-network-wired text-brand-amber mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Split-Brain Partition:</strong> Pause active leader, promote standby to epoch+1, and confirm old leader write rejections.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-rotate text-brand-indigo mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Replay Equivalence:</strong> Rebuild State Store strictly from WAL log replay and verify exact match with live state.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-vial text-brand-emerald mt-1"></i>
+                            <div><strong class="text-white block mb-0.5">Duplicate Delivery:</strong> Inject duplicate SQS queue messages and assert zero redundant execution calls.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 11. LIVE INTERACTIVE DAG ORCHESTRATOR SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-diagram-next"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Live DAG Orchestrator Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Test DAG submissions, worker leases, failure retries, and outbox relay processing</p>
+                            </div>
+                        </div>
+
+                        <!-- Presets / Reset -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simLoadDag" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-play text-brand-indigo mr-1"></i> Submit Sample DAG
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset Engine
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Controls -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <div>
+                                <label class="block text-slate-400 mb-1 font-semibold">Task ID</label>
+                                <input type="text" id="simTaskId" placeholder="e.g. transform" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1 font-semibold">Depends On</label>
+                                <input type="text" id="simDependsOn" placeholder="e.g. extract" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                            </div>
+                            <div>
+                                <label class="block text-slate-400 mb-1 font-semibold">Max Attempts</label>
+                                <input type="number" id="simMaxAttempts" value="3" min="1" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                            </div>
+                            <div class="flex items-end">
+                                <button id="btnAddCustomTask" class="w-full py-2 rounded-lg bg-brand-indigo hover:bg-indigo-600 text-white font-bold transition shadow-glow-indigo">
+                                    Add Task to DAG
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
+                            <div class="flex items-center gap-2">
+                                <button id="btnProcessWorker" class="px-4 py-2 rounded-xl bg-brand-emerald/20 hover:bg-brand-emerald/30 text-brand-emerald border border-brand-emerald/40 font-bold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-gears"></i> Run Next Ready Task
+                                </button>
+                                <button id="btnInjectWorkerCrash" class="px-4 py-2 rounded-xl bg-brand-rose/20 hover:bg-brand-rose/30 text-brand-rose border border-brand-rose/40 font-bold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-skull"></i> Inject Worker Crash
+                                </button>
+                                <button id="btnDrainOutbox" class="px-4 py-2 rounded-xl bg-brand-cyan/20 hover:bg-brand-cyan/30 text-brand-cyan border border-brand-cyan/40 font-bold transition flex items-center gap-1.5">
+                                    <i class="fa-solid fa-paper-plane"></i> Drain Outbox Relay
+                                </button>
+                            </div>
+                            <div class="text-slate-400 text-[11px] font-mono">
+                                Fencing Epoch: <span id="simEpochVal" class="text-white font-bold">1</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Output Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
+                        
+                        <!-- Panel 1: DAG State Table -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-indigo flex items-center gap-1.5">
+                                    <i class="fa-solid fa-table-list"></i> Tasks State Table
+                                </span>
+                                <span class="text-[10px] text-slate-400">DB State</span>
+                            </div>
+                            <div id="simTaskTable" class="space-y-1.5 min-h-[150px] max-h-[170px] overflow-y-auto">
+                                <div class="text-slate-500 text-center text-[11px] pt-10">No DAG loaded</div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Write-Ahead Log (WAL) -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-amber flex items-center gap-1.5">
+                                    <i class="fa-solid fa-file-pen"></i> Write-Ahead Log
+                                </span>
+                                <span class="text-[10px] text-slate-400">WAL</span>
+                            </div>
+                            <div id="simWalLog" class="space-y-1 text-[11px] text-slate-300 min-h-[150px] max-h-[170px] overflow-y-auto">
+                                <div class="text-slate-500 text-center pt-10">WAL empty</div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 3: Outbox Queue -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-cyan flex items-center gap-1.5">
+                                    <i class="fa-solid fa-inbox"></i> Outbox Queue
+                                </span>
+                                <span class="text-[10px] text-slate-400">Relay</span>
+                            </div>
+                            <div id="simOutboxList" class="space-y-1 text-[11px] text-slate-300 min-h-[150px] max-h-[170px] overflow-y-auto">
+                                <div class="text-slate-500 text-center pt-10">Outbox empty</div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 4: Worker Fleet Log -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-emerald flex items-center gap-1.5">
+                                    <i class="fa-solid fa-server"></i> Worker Fleet
+                                </span>
+                                <span class="text-[10px] text-slate-400">Execution</span>
+                            </div>
+                            <div id="simWorkerLog" class="space-y-1 text-[11px] text-slate-300 min-h-[150px] max-h-[170px] overflow-y-auto">
+                                <div class="text-slate-500 text-center pt-10">Idle workers</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Execution Trace -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <span class="text-slate-400 font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-brand-emerald"></i> Orchestrator Event &amp; State Trace
+                            </span>
+                            <span class="text-[10px] text-slate-500">Real-time Scheduler</span>
+                        </div>
+                        <div id="simTraceLog" class="min-h-[90px] max-h-[130px] overflow-y-auto space-y-1 text-slate-300">
+                            <div class="text-slate-500 italic">Ready. Click 'Submit Sample DAG' to initialize orchestration pipeline.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 12. CONCLUSION & REFERENCES -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            12
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">12. Conclusion & References</h2>
+                            <p class="text-xs text-slate-400">Architectural takeaway & academic citations</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The Resilient Distributed DAG Orchestrator adds a thin, carefully specified WAL-backed state machine layer over a best-effort queue and a stateless worker fleet. The layer supplies what raw queue primitives lack: dependency awareness, deterministic crash recovery, and idempotent execution. Phase 1 fixes the requirements, architecture, data model, state machine, and test plan; Phase 2 implements the harness to prove guarantees under fault injection.
+                        </p>
+                    </div>
+
+                    <div class="pt-4 border-t border-slate-800 space-y-2 text-xs font-mono text-slate-400">
+                        <div class="text-slate-200 font-bold mb-2">References & Foundations:</div>
+                        <div>1. C. Mohan et al. "ARIES: A transaction recovery method using write-ahead logging", ACM TODS 1992.</div>
+                        <div>2. M. Herlihy, J. Wing. "Linearizability: A correctness condition for concurrent objects", ACM TOPLAS 1990.</div>
+                        <div>3. M. Kleppmann. "Designing Data-Intensive Applications", O'Reilly 2017 (Fencing Tokens & Outbox).</div>
+                        <div>4. D. Ongaro, J. Ousterhout. "In search of an understandable consensus algorithm (Raft)", USENIX ATC 2014.</div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">O</div>
+                <span class="text-slate-300 font-semibold">Resilient Distributed DAG Orchestrator</span>
+            </div>
+            <div class="text-slate-400">
+                Course Guide: Mrs. Priya R.L. | Team: Sahil Mirchandani &amp; James Lijo (Group 07)
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: INTERACTIVE SIMULATOR & NAVIGATION -->
+    <script>
+        // --- 1. READING PROGRESS & SCROLLSPY ---
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) {
+                    current = sec.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // --- 2. MOBILE TOC DRAWER ---
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // --- 3. ARCHITECTURE TABS ---
+        document.querySelectorAll('.arch-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.arch-tab').forEach(b => {
+                    b.classList.remove('active', 'bg-brand-indigo', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('active', 'bg-brand-indigo', 'text-white');
+                btn.classList.remove('text-slate-400');
+
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.arch-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById('arch-' + tab).classList.remove('hidden');
+            });
+        });
+
+        // --- 4. IN-PAGE SEARCH ---
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            clearSearch.classList.toggle('hidden', val.length === 0);
+        });
+
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- 5. LIVE DAG ORCHESTRATOR SIMULATOR ---
+        class DagOrchestratorSimulator {
+            constructor() {
+                this.lsn = 1000;
+                this.epoch = 1;
+                this.tasks = new Map(); // id -> { id, deps: [], status, attempts: 0, maxAttempts: 3 }
+                this.wal = [];
+                this.outbox = [];
+                this.workerLogs = [];
+                this.traceLogs = [];
+            }
+
+            logTrace(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let colorClass = 'text-slate-300';
+                if (type === 'success') colorClass = 'text-brand-emerald font-semibold';
+                if (type === 'warn') colorClass = 'text-brand-amber';
+                if (type === 'error') colorClass = 'text-brand-rose';
+                if (type === 'step') colorClass = 'text-brand-indigo font-mono';
+
+                this.traceLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.traceLogs.length > 25) this.traceLogs.pop();
+                this.renderUI();
+            }
+
+            appendWAL(taskId, eventType, payload = {}) {
+                this.lsn++;
+                const entry = { lsn: this.lsn, epoch: this.epoch, taskId, eventType, payload };
+                this.wal.unshift(entry);
+                return entry;
+            }
+
+            submitSampleDAG() {
+                this.reset();
+                this.logTrace("Submitting DAG workflow 'nightly-report' over API Gateway...", 'step');
+                
+                const sampleTasks = [
+                    { id: 'extract', deps: [], maxAttempts: 3 },
+                    { id: 'transform', deps: ['extract'], maxAttempts: 3 },
+                    { id: 'load', deps: ['transform'], maxAttempts: 3 },
+                    { id: 'notify', deps: ['load'], maxAttempts: 2 }
+                ];
+
+                sampleTasks.forEach(t => {
+                    const isReady = t.deps.length === 0;
+                    const status = isReady ? 'READY' : 'PENDING';
+                    this.tasks.set(t.id, { ...t, status, attempts: 0 });
+                    this.appendWAL(t.id, 'SUBMITTED', { status });
+
+                    if (isReady) {
+                        this.outbox.push({ outboxId: `ob-${Date.now()}-${t.id}`, taskId: t.id, epoch: this.epoch });
+                    }
+                });
+
+                this.logTrace("DAG initialized: 'extract' task set to READY & added to Outbox queue.", 'success');
+                this.renderUI();
+            }
+
+            addTask(id, depsStr, maxAttempts) {
+                if (!id) return this.logTrace("Task ID required", "error");
+                const deps = depsStr ? depsStr.split(',').map(s => s.trim()).filter(Boolean) : [];
+                
+                const allDepsExist = deps.every(d => this.tasks.has(d));
+                if (!allDepsExist) return this.logTrace("One or more specified dependency tasks do not exist", "error");
+
+                const isReady = deps.every(d => this.tasks.get(d).status === 'SUCCEEDED');
+                const status = isReady ? 'READY' : 'PENDING';
+
+                this.tasks.set(id, { id, deps, status, attempts: 0, maxAttempts });
+                this.appendWAL(id, 'ADDED', { status });
+
+                if (isReady) {
+                    this.outbox.push({ outboxId: `ob-${Date.now()}-${id}`, taskId: id, epoch: this.epoch });
+                }
+
+                this.logTrace(`Added task '${id}' (Status: ${status})`, 'success');
+                this.renderUI();
+            }
+
+            drainOutbox() {
+                if (this.outbox.length === 0) return this.logTrace("Outbox is empty.", "warn");
+                const drained = [...this.outbox];
+                this.outbox = [];
+                drained.forEach(item => {
+                    this.logTrace(`[OUTBOX RELAY] Published task '${item.taskId}' to Task SQS Queue under Epoch ${item.epoch}`, 'success');
+                });
+                this.renderUI();
+            }
+
+            runNextTask() {
+                const readyTask = Array.from(this.tasks.values()).find(t => t.status === 'READY');
+                if (!readyTask) return this.logTrace("No task currently in READY state.", "warn");
+
+                // Transition to RUNNING
+                readyTask.status = 'RUNNING';
+                readyTask.attempts++;
+                this.appendWAL(readyTask.id, 'LEASE_ACQUIRED', { attempt: readyTask.attempts, worker: 'worker-node-01' });
+                this.workerLogs.unshift(`[RUNNING] worker-node-01 executing '${readyTask.id}' (Attempt #${readyTask.attempts})`);
+
+                this.logTrace(`Worker acquired lease for '${readyTask.id}'. Executing handler...`, 'step');
+
+                // Simulate execution completion
+                setTimeout(() => {
+                    readyTask.status = 'SUCCEEDED';
+                    this.appendWAL(readyTask.id, 'SUCCEEDED', { resultRef: `s3://bucket/output-${readyTask.id}.json` });
+                    this.workerLogs.unshift(`[SUCCESS] '${readyTask.id}' checkpoint written to S3 & event published.`);
+
+                    // Evaluate downstream dependents
+                    this.evaluateDependents();
+                    this.logTrace(`Task '${readyTask.id}' completed successfully!`, 'success');
+                    this.renderUI();
+                }, 400);
+
+                this.renderUI();
+            }
+
+            injectCrash() {
+                const runningTask = Array.from(this.tasks.values()).find(t => t.status === 'RUNNING');
+                if (!runningTask) return this.logTrace("No task currently in RUNNING state to crash.", "warn");
+
+                this.logTrace(`[INJECT FAULT] Crashing worker mid-execution on task '${runningTask.id}'...`, 'error');
+
+                if (runningTask.attempts < runningTask.maxAttempts) {
+                    runningTask.status = 'RETRYING';
+                    this.appendWAL(runningTask.id, 'FAILED', { error: 'Worker timeout / process crash', attempt: runningTask.attempts });
+                    this.logTrace(`Task '${runningTask.id}' moved to RETRYING (Attempts: ${runningTask.attempts}/${runningTask.maxAttempts})`, 'warn');
+
+                    setTimeout(() => {
+                        runningTask.status = 'READY';
+                        this.outbox.push({ outboxId: `ob-${Date.now()}-${runningTask.id}`, taskId: runningTask.id, epoch: this.epoch });
+                        this.logTrace(`Task '${runningTask.id}' backoff expired -> returned to READY`, 'info');
+                        this.renderUI();
+                    }, 800);
+                } else {
+                    runningTask.status = 'DEAD_LETTERED';
+                    this.appendWAL(runningTask.id, 'DEAD_LETTERED', { cause: 'Exhausted retries' });
+                    this.logTrace(`Task '${runningTask.id}' EXHAUSTED RETRIES -> Moved to DLQ!`, 'error');
+                    this.blockDependents(runningTask.id);
+                }
+                this.renderUI();
+            }
+
+            evaluateDependents() {
+                this.tasks.forEach(task => {
+                    if (task.status === 'PENDING') {
+                        const allMet = task.deps.every(depId => {
+                            const dep = this.tasks.get(depId);
+                            return dep && (dep.status === 'SUCCEEDED' || dep.status === 'SKIPPED');
+                        });
+                        if (allMet) {
+                            task.status = 'READY';
+                            this.appendWAL(task.id, 'DEPENDENCIES_SATISFIED', { status: 'READY' });
+                            this.outbox.push({ outboxId: `ob-${Date.now()}-${task.id}`, taskId: task.id, epoch: this.epoch });
+                            this.logTrace(`Unblocked task '${task.id}' -> moved to READY & added to Outbox`, 'success');
+                        }
+                    }
+                });
+            }
+
+            blockDependents(deadTaskId) {
+                this.tasks.forEach(task => {
+                    if (task.deps.includes(deadTaskId) && task.status === 'PENDING') {
+                        task.status = 'BLOCKED';
+                        this.appendWAL(task.id, 'BLOCKED', { upstreamDead: deadTaskId });
+                        this.logTrace(`Upstream task '${deadTaskId}' dead-lettered -> Task '${task.id}' set to BLOCKED`, 'error');
+                    }
+                });
+            }
+
+            reset() {
+                this.lsn = 1000;
+                this.epoch = 1;
+                this.tasks.clear();
+                this.wal = [];
+                this.outbox = [];
+                this.workerLogs = [];
+                this.traceLogs = [];
+                document.getElementById('simEpochVal').innerText = this.epoch;
+                this.logTrace('Orchestrator engine state cleared.', 'info');
+            }
+
+            renderUI() {
+                // Task State Table
+                const taskTable = document.getElementById('simTaskTable');
+                if (this.tasks.size === 0) {
+                    taskTable.innerHTML = `<div class="text-slate-500 text-center text-[11px] pt-10">No DAG loaded</div>`;
+                } else {
+                    taskTable.innerHTML = Array.from(this.tasks.values()).map(t => {
+                        let color = 'text-brand-indigo';
+                        if (t.status === 'READY') color = 'text-brand-emerald';
+                        if (t.status === 'RUNNING') color = 'text-brand-violet';
+                        if (t.status === 'RETRYING') color = 'text-brand-amber';
+                        if (t.status === 'DEAD_LETTERED' || t.status === 'BLOCKED') color = 'text-brand-rose';
+                        return `
+                            <div class="p-1.5 rounded bg-slate-800 border border-slate-700/60 flex items-center justify-between">
+                                <span class="text-white font-bold">${t.id}</span>
+                                <span class="${color} font-mono font-bold">${t.status}</span>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                // WAL Log
+                const walEl = document.getElementById('simWalLog');
+                if (this.wal.length === 0) {
+                    walEl.innerHTML = `<div class="text-slate-500 text-center pt-10">WAL empty</div>`;
+                } else {
+                    walEl.innerHTML = this.wal.map(w => `
+                        <div class="truncate"><span class="text-brand-amber">LSN:${w.lsn}</span> <span class="text-slate-400">${w.taskId}</span> &rarr; <span class="text-white">${w.eventType}</span></div>
+                    `).join('');
+                }
+
+                // Outbox
+                const outboxEl = document.getElementById('simOutboxList');
+                if (this.outbox.length === 0) {
+                    outboxEl.innerHTML = `<div class="text-slate-500 text-center pt-10">Outbox queue empty</div>`;
+                } else {
+                    outboxEl.innerHTML = this.outbox.map(o => `
+                        <div class="p-1.5 rounded bg-slate-800 border border-slate-700/60 flex items-center justify-between">
+                            <span class="text-brand-cyan font-bold">${o.taskId}</span>
+                            <span class="text-[9px] text-slate-400">Epoch ${o.epoch}</span>
+                        </div>
+                    `).join('');
+                }
+
+                // Worker Log
+                const workerEl = document.getElementById('simWorkerLog');
+                if (this.workerLogs.length === 0) {
+                    workerEl.innerHTML = `<div class="text-slate-500 text-center pt-10">Idle workers</div>`;
+                } else {
+                    workerEl.innerHTML = this.workerLogs.map(l => `<div class="truncate">${l}</div>`).join('');
+                }
+
+                // Trace
+                document.getElementById('simTraceLog').innerHTML = this.traceLogs.join('');
+            }
+        }
+
+        const engine = new DagOrchestratorSimulator();
+
+        document.getElementById('simLoadDag').addEventListener('click', () => engine.submitSampleDAG());
+        document.getElementById('simReset').addEventListener('click', () => engine.reset());
+        document.getElementById('btnProcessWorker').addEventListener('click', () => engine.runNextTask());
+        document.getElementById('btnInjectWorkerCrash').addEventListener('click', () => engine.injectCrash());
+        document.getElementById('btnDrainOutbox').addEventListener('click', () => engine.drainOutbox());
+        document.getElementById('btnAddCustomTask').addEventListener('click', () => {
+            const id = document.getElementById('simTaskId').value.trim();
+            const deps = document.getElementById('simDependsOn').value.trim();
+            const attempts = parseInt(document.getElementById('simMaxAttempts').value) || 3;
+            engine.addTask(id, deps, attempts);
+        });
+    </script>
+</body>
+</html>

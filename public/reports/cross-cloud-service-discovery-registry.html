@@ -1,0 +1,1700 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cross cloud service discovery Registry</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.35)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.35)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.35)',
+              'glow-amber': '0 0 25px -5px rgba(245, 158, 11, 0.35)',
+              'glow-rose': '0 0 25px -5px rgba(244, 63, 94, 0.35)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      /* Custom Scrollbar & Dark Glass Aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.35);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.25);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .gradient-text-emerald {
+        background: linear-gradient(135deg, #6EE7B7 0%, #10B981 50%, #06B6D4 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+
+      .search-highlight {
+        background-color: rgba(245, 158, 11, 0.35);
+        color: #FDE68A;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    <i class="fa-solid fa-network-wired text-sm"></i>
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Cross cloud service discovery Registry
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">PS 20</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Advanced Cloud System Design Technical Paper</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Simulator Jump Button -->
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Registry Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Overview & Team</a>
+                            <a href="#abstract" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Abstract</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Problem & Objectives</a>
+                            <a href="#scope" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Scope & Assumptions</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. System Architecture</a>
+                            <a href="#registration-discovery" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. Registration & Discovery</a>
+                            <a href="#consistency-safeguards" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Safeguards & Resilience</a>
+                            <a href="#scalability" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Scalability & Extensions</a>
+                            <a href="#tech-stack" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Technology Selection</a>
+                            <a href="#evaluation" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Performance Evaluation</a>
+                            <a href="#simulation-analysis" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">10. System-Level Analysis</a>
+                            <a href="#risks" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">11. Risks & Limitations</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">12. Conclusion</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 13. Interactive Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Author Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Engineering Team</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Team Members</span>
+                                <span class="text-slate-200 font-semibold block">Swarangi S. Savekar (D12A 67)</span>
+                                <span class="text-slate-200 font-semibold block">Ketaki A. Patil (D12A 70)</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Course: System Design</span>
+                                <span class="text-brand-indigo font-mono">PS 20</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">0. Overview & Team</a>
+                        <a href="#abstract" class="mobile-toc-link block py-2 text-slate-300">1. Abstract</a>
+                        <a href="#introduction" class="mobile-toc-link block py-2 text-slate-300">2. Problem & Objectives</a>
+                        <a href="#scope" class="mobile-toc-link block py-2 text-slate-300">3. Scope & Assumptions</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">4. System Architecture</a>
+                        <a href="#registration-discovery" class="mobile-toc-link block py-2 text-slate-300">5. Registration & Discovery</a>
+                        <a href="#consistency-safeguards" class="mobile-toc-link block py-2 text-slate-300">6. Safeguards & Resilience</a>
+                        <a href="#scalability" class="mobile-toc-link block py-2 text-slate-300">7. Scalability & Extensions</a>
+                        <a href="#tech-stack" class="mobile-toc-link block py-2 text-slate-300">8. Technology Selection</a>
+                        <a href="#evaluation" class="mobile-toc-link block py-2 text-slate-300">9. Performance Evaluation</a>
+                        <a href="#simulation-analysis" class="mobile-toc-link block py-2 text-slate-300">10. System-Level Analysis</a>
+                        <a href="#risks" class="mobile-toc-link block py-2 text-slate-300">11. Risks & Limitations</a>
+                        <a href="#conclusion" class="mobile-toc-link block py-2 text-slate-300">12. Conclusion</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">13. Live Consul Registry Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-microchip"></i> System Design Technical Report
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Multi-Cloud Microservices
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Consul Service Catalog
+                            </span>
+                        </div>
+
+                        <!-- Paper Title -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Cross cloud service discovery <span class="gradient-text">Registry</span>
+                        </h1>
+
+                        <!-- Subtitle / Meta Summary -->
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            Problem Statement 20 – Advanced Cloud System Design Micro-Project detailing cross-provider discovery, dynamic health monitoring, and decoupling client configurations across AWS, GCP, and Azure environments.
+                        </p>
+
+                        <!-- Authors & Details Grid -->
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Engineering Authors</span>
+                                <span class="text-white font-bold text-sm block">Swarangi S. Savekar (D12A 67)</span>
+                                <span class="text-white font-bold text-sm block">Ketaki A. Patil (D12A 70)</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Course & Topic</span>
+                                <span class="text-white font-semibold">System Design Micro-Project</span>
+                                <span class="text-slate-400 block text-[11px]">PS 20 - Dynamic Service Discovery</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Core Stack</span>
+                                <span class="text-slate-300">Consul Engine • Express API • Node.js • Docker • HTML5 Dashboard</span>
+                            </div>
+                        </div>
+
+                        <!-- Hero Action Controls -->
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Live Consul Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore Architecture (Fig 1)
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. ABSTRACT -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Abstract</h2>
+                            <p class="text-xs text-slate-400">Core executive summary & architectural premise</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            This report presents the design of a <strong class="text-white">Cross-Cloud Service Discovery Registry</strong> for applications whose services may run in heterogeneous cloud environments such as Amazon Web Services (AWS), Google Cloud Platform (GCP), and Microsoft Azure. Since service instances can be restarted, scaled, moved, or become unavailable, maintaining their network addresses manually can lead to stale configuration and failed requests.
+                        </p>
+                        <p>
+                            The proposed course-scale system uses <span class="text-brand-indigo font-mono font-semibold">Consul</span> as the service registry and health-check mechanism. Service instances register details such as service name, instance ID, address, port, tags, provider metadata, and health endpoint. A client or backend can query the registry to discover available instances, while health checks help identify services that are not responding.
+                        </p>
+                        <p>
+                            The initial implementation uses Docker containers on one computer to represent services associated with different cloud providers. This provides a local demonstration of the discovery workflow, illustrating cross-environment resolution without claiming full commercial cloud deployment.
+                        </p>
+                    </div>
+
+                    <!-- Highlight Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+                        <div class="glass-card p-4 rounded-2xl border-brand-indigo/30">
+                            <div class="text-brand-indigo text-lg mb-1"><i class="fa-solid fa-server"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Consul Catalog Core</h4>
+                            <p class="text-[11px] text-slate-400">Centralized, high-availability service registry tracking dynamic ports, IPs, and cloud metadata.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-violet/30">
+                            <div class="text-brand-violet text-lg mb-1"><i class="fa-solid fa-heart-pulse"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Dynamic Health Checks</h4>
+                            <p class="text-[11px] text-slate-400">Recurring automated HTTP health probes isolating failing instances from discovery pools.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-emerald/30">
+                            <div class="text-brand-emerald text-lg mb-1"><i class="fa-solid fa-cloud"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Multi-Provider Labeling</h4>
+                            <p class="text-[11px] text-slate-400">Logical grouping across AWS, GCP, and Azure mock containers for unified cross-cloud routing.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. INTRODUCTION AND PROBLEM DEFINITION -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Introduction & Problem Definition</h2>
+                            <p class="text-xs text-slate-400">Problem statement, challenge definition, and project objectives</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            Distributed applications are commonly divided into independent microservices, each responsible for a distinct function such as user management, payments, or order processing. In a multi-cloud arrangement, these services may be hosted across different cloud providers. Their network addresses and availability can change unpredictably over time due to continuous deployments, auto-scaling events, restarts, and underlying infrastructure failures.
+                        </p>
+                    </div>
+
+                    <!-- Problem Statement Box -->
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-indigo/10 via-brand-violet/10 to-transparent border border-brand-indigo/30 space-y-2">
+                        <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-question"></i> 2.0 Problem Definition
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            "Without a dynamic service discovery mechanism, clients must rely on hard-coded IP addresses or manually maintained configuration files. These static approaches become unmanageable as microservices scale. The design challenge is to maintain a current service directory, let clients discover healthy instances by logical name, and continuously evaluate health states to prevent routing requests to degraded targets."
+                        </p>
+                    </div>
+
+                    <!-- Objectives List Grid -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-bullseye text-brand-emerald"></i> 2.1 Project Objectives
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Metadata Registration</strong> Register service instances and maintain their identifying and network metadata.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Logical Name Discovery</strong> Discover services by logical name without requiring clients to hard-code instance addresses.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Recurring Health Probing</strong> Perform recurring health checks and expose the current health state of each registered instance.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Multi-Provider Prototype</strong> Demonstrate example services labelled AWS, GCP, and Azure through a local Docker prototype.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Unified Dashboard UI</strong> Provide a web dashboard for service inventory, discovery results, provider labels, and health status.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Fault Tolerance Verification</strong> Test registration, discovery, failure detection, recovery, and registry-unavailable behavior.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. SCOPE AND DESIGN ASSUMPTIONS -->
+                <section id="scope" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Scope and Design Assumptions</h2>
+                            <p class="text-xs text-slate-400">Boundary specification and course prototype assumptions</p>
+                        </div>
+                    </div>
+
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-[#10B981] fa-table-list text-brand-emerald"></i> Scope Matrix (Included vs Excluded)
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/2">Included in the course prototype</th>
+                                        <th class="px-4 py-3 border-b border-slate-800 w-1/2">Excluded from prototype verification</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Local web dashboard and Node.js/Express API</td>
+                                        <td class="px-4 py-3 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Production load balancers and replicated application APIs</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Consul service catalog and configured health checks</td>
+                                        <td class="px-4 py-3 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> A custom implementation of Consul's internal gossip or consensus mechanisms</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Docker-based service instances labelled AWS, GCP, and Azure</td>
+                                        <td class="px-4 py-3 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Actual deployment spanning three commercial cloud accounts</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Service registration, lookup, and health-status display</td>
+                                        <td class="px-4 py-3 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Production-grade multi-cloud networking and disaster recovery</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Simulated service failure and recovery tests</td>
+                                        <td class="px-4 py-3 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Formal proof of high availability or fault tolerance</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-slate-200"><i class="fa-solid fa-check text-brand-emerald mr-2"></i> Local measurements of discovery latency and health detection</td>
+                                        <td class="px-4 py-3 text-slate-400"><i class="fa-solid fa-xmark text-brand-rose mr-2"></i> Claims about production throughput or real-world cloud latency</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2 text-xs">
+                        <strong class="text-white font-semibold block">3.1 System Assumptions</strong>
+                        <p class="text-slate-400 leading-relaxed">
+                            The prototype assumes that Consul and the sample microservices communicate on a reachable local Docker network bridge. The Express backend connects via a configurable Consul HTTP API URL. The AWS/GCP/Azure tags represent logical provider metadata for demonstration purposes rather than multi-region VPC peerings.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 4. SYSTEM ARCHITECTURE (FIGURE 1 PRESERVED INTERACTIVE DIAGRAM) -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                                04
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white">4. System Architecture</h2>
+                                <p class="text-xs text-slate-400">Figure 1 Preserved — End-to-end Cross-Cloud Consul Registry Architecture</p>
+                            </div>
+                        </div>
+
+                        <!-- Diagram View Tabs -->
+                        <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs overflow-x-auto">
+                            <button class="arch-tab px-3 py-1.5 rounded-lg active font-semibold text-white bg-brand-indigo shadow transition whitespace-nowrap" data-tab="fig1">
+                                Figure 1 (Full System)
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition whitespace-nowrap" data-tab="clientflow">
+                                Client Query Flow
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition whitespace-nowrap" data-tab="regpath">
+                                Consul Registration Path
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition whitespace-nowrap" data-tab="healthpath">
+                                Health Check &amp; Failure Path
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Diagram Container -->
+                    <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 relative overflow-x-auto min-h-[460px]">
+
+                        <!-- TAB 1: FIGURE 1 FULL SYSTEM ARCHITECTURE -->
+                        <div id="arch-fig1" class="arch-pane space-y-6">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider">Cross-Cloud System Design</span>
+                                <h3 class="text-base font-bold text-white">Figure 1. Consul Service Registry Cluster &amp; Multi-Cloud Container Infrastructure</h3>
+                            </div>
+
+                            <!-- Visual Diagram Representation of Figure 1 from Document -->
+                            <div class="p-5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-6 min-w-[760px]">
+                                
+                                <!-- Top Row: 3 Cloud Environments -->
+                                <div class="grid grid-cols-3 gap-4">
+                                    <!-- AWS Cloud -->
+                                    <div class="p-3.5 rounded-xl bg-brand-amber/10 border border-brand-amber/30 space-y-2">
+                                        <div class="flex items-center justify-between text-xs font-bold text-brand-amber">
+                                            <span class="flex items-center gap-1.5"><i class="fa-brands fa-aws"></i> AWS Cloud</span>
+                                            <span class="text-[9px] bg-brand-amber/20 px-2 py-0.5 rounded">Environment</span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div class="p-2 rounded bg-slate-800 border border-slate-700 font-mono text-center">
+                                                <i class="fa-solid fa-box-open text-brand-amber block mb-1"></i>
+                                                <span class="text-white font-bold block">Service A</span>
+                                                <span class="text-[9px] text-slate-400">User API</span>
+                                            </div>
+                                            <div class="p-2 rounded bg-slate-800 border border-slate-700 font-mono text-center">
+                                                <i class="fa-solid fa-box-open text-brand-amber block mb-1"></i>
+                                                <span class="text-white font-bold block">Service B</span>
+                                                <span class="text-[9px] text-slate-400">Auth DB</span>
+                                            </div>
+                                        </div>
+                                        <div class="text-[9px] text-brand-amber/80 text-center pt-1 font-mono">Register / Health Check ↓</div>
+                                    </div>
+
+                                    <!-- GCP Cloud -->
+                                    <div class="p-3.5 rounded-xl bg-brand-indigo/10 border border-brand-indigo/30 space-y-2">
+                                        <div class="flex items-center justify-between text-xs font-bold text-brand-indigo">
+                                            <span class="flex items-center gap-1.5"><i class="fa-brands fa-google text-brand-cyan"></i> GCP Cloud</span>
+                                            <span class="text-[9px] bg-brand-indigo/20 px-2 py-0.5 rounded">Environment</span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div class="p-2 rounded bg-slate-800 border border-slate-700 font-mono text-center">
+                                                <i class="fa-solid fa-box-open text-brand-indigo block mb-1"></i>
+                                                <span class="text-white font-bold block">Service C</span>
+                                                <span class="text-[9px] text-slate-400">Payment</span>
+                                            </div>
+                                            <div class="p-2 rounded bg-slate-800 border border-slate-700 font-mono text-center">
+                                                <i class="fa-solid fa-box-open text-brand-indigo block mb-1"></i>
+                                                <span class="text-white font-bold block">Service D</span>
+                                                <span class="text-[9px] text-slate-400">Billing</span>
+                                            </div>
+                                        </div>
+                                        <div class="text-[9px] text-brand-indigo/80 text-center pt-1 font-mono">Register / Health Check ↓</div>
+                                    </div>
+
+                                    <!-- Azure Cloud -->
+                                    <div class="p-3.5 rounded-xl bg-brand-cyan/10 border border-brand-cyan/30 space-y-2">
+                                        <div class="flex items-center justify-between text-xs font-bold text-brand-cyan">
+                                            <span class="flex items-center gap-1.5"><i class="fa-brands fa-microsoft"></i> Azure Cloud</span>
+                                            <span class="text-[9px] bg-brand-cyan/20 px-2 py-0.5 rounded">Environment</span>
+                                        </div>
+                                        <div class="grid grid-cols-2 gap-2 text-[11px]">
+                                            <div class="p-2 rounded bg-slate-800 border border-slate-700 font-mono text-center">
+                                                <i class="fa-solid fa-box-open text-brand-cyan block mb-1"></i>
+                                                <span class="text-white font-bold block">Service E</span>
+                                                <span class="text-[9px] text-slate-400">Order API</span>
+                                            </div>
+                                            <div class="p-2 rounded bg-slate-800 border border-slate-700 font-mono text-center">
+                                                <i class="fa-solid fa-box-open text-brand-cyan block mb-1"></i>
+                                                <span class="text-white font-bold block">Service F</span>
+                                                <span class="text-[9px] text-slate-400">Inventory</span>
+                                            </div>
+                                        </div>
+                                        <div class="text-[9px] text-brand-cyan/80 text-center pt-1 font-mono">Register / Health Check ↓</div>
+                                    </div>
+                                </div>
+
+                                <!-- Middle Layer: Clients -> Gateway -> Consul Registry Cluster -->
+                                <div class="grid grid-cols-12 gap-4 items-center">
+                                    
+                                    <!-- Clients Box -->
+                                    <div class="col-span-3 p-3.5 rounded-xl bg-slate-800 border border-slate-700 space-y-2">
+                                        <div class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                                            <i class="fa-solid fa-users text-brand-emerald"></i> Clients
+                                        </div>
+                                        <div class="space-y-1.5 text-[10px] text-slate-300">
+                                            <div class="p-1.5 rounded bg-slate-900 border border-slate-800 flex items-center gap-2">
+                                                <i class="fa-solid fa-laptop text-brand-indigo"></i> Web App
+                                            </div>
+                                            <div class="p-1.5 rounded bg-slate-900 border border-slate-800 flex items-center gap-2">
+                                                <i class="fa-solid fa-[#10B981] fa-desktop text-brand-emerald"></i> Frontend UI
+                                            </div>
+                                            <div class="p-1.5 rounded bg-slate-900 border border-slate-800 flex items-center gap-2">
+                                                <i class="fa-solid fa-cubes text-brand-amber"></i> Other Services
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Connector -->
+                                    <div class="col-span-2 text-center space-y-1">
+                                        <div class="text-[10px] text-brand-indigo font-mono font-bold">Discovery Request →</div>
+                                        <div class="h-0.5 bg-brand-indigo/40 w-full"></div>
+                                        <div class="text-[10px] text-brand-emerald font-mono font-bold">← Healthy Instances</div>
+                                    </div>
+
+                                    <!-- API Gateway -->
+                                    <div class="col-span-2 p-3.5 rounded-xl bg-slate-800 border border-slate-700 text-center space-y-2">
+                                        <i class="fa-solid fa-diagram-nested text-brand-violet text-lg"></i>
+                                        <div class="text-xs font-bold text-white">Load Balancer / API Gateway</div>
+                                        <div class="text-[9px] text-slate-400 font-mono">Node.js Express API</div>
+                                    </div>
+
+                                    <!-- Connector -->
+                                    <div class="col-span-1 text-center space-y-1">
+                                        <div class="text-[9px] text-brand-violet font-mono">Query →</div>
+                                        <div class="h-0.5 bg-brand-violet/40 w-full"></div>
+                                        <div class="text-[9px] text-brand-cyan font-mono">← Catalog</div>
+                                    </div>
+
+                                    <!-- Consul Service Registry Cluster -->
+                                    <div class="col-span-4 p-4 rounded-xl bg-brand-violet/15 border border-brand-violet/40 space-y-3">
+                                        <div class="flex items-center justify-between text-xs font-bold text-brand-violet uppercase">
+                                            <span>Consul Service Registry Cluster</span>
+                                            <span class="text-[9px] bg-brand-violet/20 px-2 py-0.5 rounded text-violet-300">Raft Consensus</span>
+                                        </div>
+                                        <div class="grid grid-cols-3 gap-1.5 text-[9px] font-mono">
+                                            <div class="p-2 rounded bg-slate-900 border border-brand-indigo text-center space-y-0.5">
+                                                <i class="fa-solid fa-crown text-brand-amber"></i>
+                                                <div class="font-bold text-white">Consul 1</div>
+                                                <div class="text-brand-amber font-bold text-[8px]">(Leader)</div>
+                                            </div>
+                                            <div class="p-2 rounded bg-slate-900 border border-slate-700 text-center space-y-0.5">
+                                                <i class="fa-solid fa-server text-slate-400"></i>
+                                                <div class="font-bold text-white">Consul 2</div>
+                                                <div class="text-slate-400 text-[8px]">(Follower)</div>
+                                            </div>
+                                            <div class="p-2 rounded bg-slate-900 border border-slate-700 text-center space-y-0.5">
+                                                <i class="fa-solid fa-server text-slate-400"></i>
+                                                <div class="font-bold text-white">Consul 3</div>
+                                                <div class="text-slate-400 text-[8px]">(Follower)</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Bottom Row: Data Directory & Monitoring UI -->
+                                <div class="grid grid-cols-2 gap-4 pt-2">
+                                    <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-3">
+                                        <i class="fa-solid fa-database text-brand-amber text-xl"></i>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-white">Persistent Storage (Consul Data Directory)</h4>
+                                            <p class="text-[10px] text-slate-400">Stores service registry catalog state, health states, and node metadata</p>
+                                        </div>
+                                    </div>
+                                    <div class="p-3 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-3">
+                                        <i class="fa-solid fa-[#10B981] fa-chart-line text-brand-emerald text-xl"></i>
+                                        <div>
+                                            <h4 class="text-xs font-bold text-white">Monitoring &amp; UI (Consul UI Dashboard)</h4>
+                                            <p class="text-[10px] text-slate-400">Visual overview of registered services, health statuses, and instance endpoints</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: CLIENT QUERY FLOW -->
+                        <div id="arch-clientflow" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider block text-center">Discovery Request &amp; Service Routing Sequence</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-indigo">1. Discovery Query</span>
+                                    <p class="text-slate-400">Client sends logical service request (e.g. <code>payment-service</code>) to Express Backend API.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-indigo">2. Consul Catalog Check</span>
+                                    <p class="text-slate-400">Backend queries Consul HTTP API for healthy instances matching logical name.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-emerald">3. Return Healthy Endpoints</span>
+                                    <p class="text-slate-400">Consul filters critical targets and returns active host IPs, ports, and cloud tags.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-emerald">4. Direct Service Request</span>
+                                    <p class="text-slate-400">Client dispatches API payload directly to the healthy microservice instance.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: REGISTRATION PATH -->
+                        <div id="arch-regpath" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-violet uppercase tracking-wider block text-center">Service Bootstrap &amp; Metadata Registration</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-violet">Step A: Microservice Startup</span>
+                                    <p class="text-slate-400">Docker container initializes on AWS, GCP, or Azure and opens HTTP application port.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-violet">Step B: Register Payload</span>
+                                    <p class="text-slate-400">Sends JSON payload containing Service ID, Name, Port, Provider Tag, and <code>/health</code> URL.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-violet">Step C: Catalog Insertion</span>
+                                    <p class="text-slate-400">Consul Leader node replicates registration entry across followers via Raft consensus.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 4: HEALTH CHECK & FAILURE PATH -->
+                        <div id="arch-healthpath" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-rose uppercase tracking-wider block text-center">Automated Health Probing &amp; Isolation</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-emerald">1. Recurring Probe</span>
+                                    <p class="text-slate-400">Consul sends HTTP GET checks every 5s to instance <code>/health</code> endpoints.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-rose">2. Timeout / Crash Detection</span>
+                                    <p class="text-slate-400">If instance crashes or fails 3 consecutive checks, status transitions to <code>CRITICAL</code>.</p>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                    <span class="text-[10px] font-bold text-brand-amber">3. Catalog Exclusion</span>
+                                    <p class="text-slate-400">Unhealthy instance is excluded from discovery results, preventing traffic blackholing.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Stage Roles Table -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-list-check text-brand-cyan"></i> Stage Breakdown &amp; Component Roles
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Stage</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Component</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">1</td>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Frontend dashboard</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Submits discovery queries and displays service inventory and health state.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">2</td>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Node.js / Express API</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Validates requests and connects the dashboard to Consul.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">3</td>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Consul service registry</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Maintains the service catalog and exposes registration, lookup, and health information.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">4</td>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Service instances</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Provide application endpoints and register metadata such as address and port.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">5</td>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Health-check endpoint</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Reports whether a service instance is responding as configured.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-mono text-brand-indigo font-bold">6</td>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Docker network</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Connects the registry and sample services in the local prototype.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. SERVICE REGISTRATION AND DISCOVERY DESIGN -->
+                <section id="registration-discovery" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-8">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. Service Registration & Discovery Design</h2>
+                            <p class="text-xs text-slate-400">Schema design, registration pipelines, and text-based flowcharts</p>
+                        </div>
+                    </div>
+
+                    <!-- 4.1 Logical Service Registry Schema Table -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-code text-brand-indigo"></i> Table 4.1 Logical Service Registry Model Schema
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Field</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Purpose</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Example Value</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">service_name</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Logical name queried by clients.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">payment-service</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">service_id</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Unique ID for one instance.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">payment-01</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">address</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Address at which the instance can be reached.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">payment-service</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">port</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Port used by the application.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">8002</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">provider</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Provider label or deployment metadata.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">GCP</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">health_endpoint</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Endpoint checked by the registry.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">/health</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">health_status</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Latest reported health-check state.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">passing / critical</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 text-brand-indigo font-bold">tags</td>
+                                        <td class="px-4 py-2.5 font-sans text-slate-300">Optional labels used for grouping or filtering.</td>
+                                        <td class="px-4 py-2.5 text-slate-400">payment, gcp</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Steps Breakdown -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <span class="text-brand-indigo font-bold text-sm block">5.1 Registration Procedure</span>
+                            <ol class="space-y-1 list-decimal list-inside text-slate-400">
+                                <li>Start application service & expose endpoints.</li>
+                                <li>Register metadata with Consul catalog API.</li>
+                                <li>Consul stores instance record in catalog.</li>
+                                <li>Query catalog to verify registration state.</li>
+                            </ol>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <span class="text-brand-violet font-bold text-sm block">5.2 Health-Check Procedure</span>
+                            <ol class="space-y-1 list-decimal list-inside text-slate-400">
+                                <li>Consul executes check on endpoint at interval.</li>
+                                <li>Passing responses keep state active.</li>
+                                <li>Repeated timeouts trigger critical status.</li>
+                                <li>Dashboard updates health state live.</li>
+                            </ol>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <span class="text-brand-emerald font-bold text-sm block">5.3 Discovery & Request Procedure</span>
+                            <ol class="space-y-1 list-decimal list-inside text-slate-400">
+                                <li>Client selects logical service name.</li>
+                                <li>Frontend calls Node.js/Express backend API.</li>
+                                <li>Backend queries Consul for healthy nodes.</li>
+                                <li>Client dispatches request to active target.</li>
+                            </ol>
+                        </div>
+                    </div>
+
+                    <!-- SECTION 5.4 PRESERVED TEXT-BASED FLOWCHARTS -->
+                    <div class="p-5 rounded-2xl bg-slate-950 border border-slate-800 space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-emerald"></i> 5.4 Failure, Recovery &amp; Discovery Flowchart Trace
+                            </h3>
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-brand-emerald/20 text-brand-emerald font-mono">Preserved Flowchart</span>
+                        </div>
+                        
+                        <div class="font-mono text-xs text-slate-200 bg-slate-900/90 p-4 rounded-xl border border-slate-800/80 overflow-x-auto space-y-2 leading-relaxed">
+                            <div class="text-brand-emerald font-bold">// Complete System Discovery &amp; Lifecycle Flowchart</div>
+                            <div class="whitespace-nowrap">
+                                <span class="text-slate-400">Register service</span> <span class="text-brand-indigo">→</span> 
+                                <span class="text-slate-300">Service catalog</span> <span class="text-brand-indigo">→</span> 
+                                <span class="text-slate-300">Health checks</span> <span class="text-brand-indigo">→</span> 
+                                <span class="text-slate-300">Discovery request</span>
+                            </div>
+                            <div class="whitespace-nowrap">
+                                <span class="text-slate-400">Healthy service details</span> <span class="text-brand-emerald">→</span> 
+                                <span class="text-slate-300">Client request</span> <span class="text-brand-emerald">→</span> 
+                                <span class="text-slate-300">Service response</span>
+                            </div>
+                            <div class="whitespace-nowrap">
+                                <span class="text-slate-400">Failure detected</span> <span class="text-brand-rose">→</span> 
+                                <span class="text-rose-400">Unhealthy status</span> <span class="text-brand-rose">→</span> 
+                                <span class="text-rose-300">Excluded from healthy discovery</span>
+                            </div>
+                            <div class="whitespace-nowrap">
+                                <span class="text-slate-400">Recovery</span> <span class="text-brand-amber">→</span> 
+                                <span class="text-slate-300">Health check passes</span> <span class="text-brand-amber">→</span> 
+                                <span class="text-emerald-400">Available for discovery</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. CONSISTENCY, RECOVERY AND OPERATIONAL SAFEGUARDS -->
+                <section id="consistency-safeguards" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. Consistency, Recovery & Operational Safeguards</h2>
+                            <p class="text-xs text-slate-400">Fault tolerance strategies and production hardening practices</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The prototype distinguishes a service's registration record from its live health status. A registered service is not automatically considered healthy. The backend explicitly handles Consul HTTP timeouts and cluster disconnects rather than presenting stale historical data as live status.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                            <i class="fa-solid fa-id-badge text-brand-indigo mt-0.5"></i>
+                            <div><strong class="text-white block">Unique Instance Identification</strong> Validate registration payloads and use unique Service IDs to prevent duplicate record collisions.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                            <i class="fa-solid fa-triangle-exclamation text-brand-amber mt-0.5"></i>
+                            <div><strong class="text-white block">Explicit Error Handling</strong> Return structured JSON errors if Consul is unreachable rather than serving false passing statuses.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                            <i class="fa-solid fa-key text-brand-rose mt-0.5"></i>
+                            <div><strong class="text-white block">API ACL Protection</strong> Restrict public exposure of Consul management endpoints and authenticate administrative operations.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                            <i class="fa-solid fa-vault text-brand-cyan mt-0.5"></i>
+                            <div><strong class="text-white block">Secret Management</strong> Store tokens, keys, and cloud credentials in environment variables rather than source code.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                            <i class="fa-solid fa-[#10B981] fa-heart-pulse text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Consistent Health Mechanism</strong> Explicitly document whether Docker container health or Consul HTTP probes drive displayed states.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-2.5">
+                            <i class="fa-solid fa-rotate text-brand-violet mt-0.5"></i>
+                            <div><strong class="text-white block">Restart Verification</strong> Test automatic re-registration after container restarts prior to asserting recovery capabilities.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. SCALABILITY AND FUTURE ARCHITECTURE -->
+                <section id="scalability" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Scalability & Future Architecture</h2>
+                            <p class="text-xs text-slate-400">Roadmap from local prototype to enterprise production scale</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The course prototype establishes a functional proof-of-concept on a local system. Moving to a commercial multi-cloud environment requires scaling the Consul control plane across cloud boundaries, securing inter-service transit, and managing cross-region latencies.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <span class="text-brand-indigo font-bold text-sm block">WAN Federation</span>
+                            <p class="text-slate-400">Deploy Consul server agents across AWS, GCP, and Azure linked via WAN gossip for multi-datacenter synchronization.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <span class="text-brand-violet font-bold text-sm block">Zero-Trust mTLS</span>
+                            <p class="text-slate-400">Implement Consul Service Mesh (Connect) with automatic TLS encryption and access control policy enforcement.</p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <span class="text-brand-emerald font-bold text-sm block">Global Load Balancing</span>
+                            <p class="text-slate-400">Position API Gateways behind redundant load balancers with health-aware DNS routing (e.g., AWS Route53 / Cloudflare).</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. TECHNOLOGY SELECTION -->
+                <section id="tech-stack" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Technology Selection</h2>
+                            <p class="text-xs text-slate-400">Table 8. Software components and development toolchain specification</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Area</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Selected Technology</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Reason</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Frontend</td>
+                                    <td class="px-4 py-3 font-mono text-brand-indigo">HTML5, CSS3, JavaScript (ES6+)</td>
+                                    <td class="px-4 py-3 text-slate-400">Provides a responsive UI dashboard for catalog inventory, provider tags, and live health status.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Backend</td>
+                                    <td class="px-4 py-3 font-mono text-brand-violet">Node.js and Express API</td>
+                                    <td class="px-4 py-3 text-slate-400">Provides API routes and seamless integration between the frontend dashboard and Consul HTTP APIs.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Service Registry</td>
+                                    <td class="px-4 py-3 font-mono text-brand-emerald">HashiCorp Consul</td>
+                                    <td class="px-4 py-3 text-slate-400">Maintains service catalog entries, supports dynamic service discovery, and executes automated HTTP health checks.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Sample Services</td>
+                                    <td class="px-4 py-3 font-mono text-brand-cyan">Node.js / Python Microservices</td>
+                                    <td class="px-4 py-3 text-slate-400">Provide lightweight User, Payment, and Order microservice endpoints with dedicated <code>/health</code> routes.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Local Environment</td>
+                                    <td class="px-4 py-3 font-mono text-brand-amber">Docker &amp; Docker Compose</td>
+                                    <td class="px-4 py-3 text-slate-400">Runs the Consul cluster and sample multi-provider services reproducibly on one machine.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">API Validation</td>
+                                    <td class="px-4 py-3 font-mono text-slate-300">Browser, cURL, Postman</td>
+                                    <td class="px-4 py-3 text-slate-400">Allows registration, discovery lookup, and failure scenario testing across endpoints.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Version Control</td>
+                                    <td class="px-4 py-3 font-mono text-slate-300">Git &amp; GitHub</td>
+                                    <td class="px-4 py-3 text-slate-400">Tracks application source code, Docker compose files, and project documentation.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Monitoring / Metrics</td>
+                                    <td class="px-4 py-3 font-mono text-slate-300">Backend timestamps &amp; Test scripts</td>
+                                    <td class="px-4 py-3 text-slate-400">Records discovery request response times and health-detection failure/recovery delays.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 9. PERFORMANCE EVALUATION AND FEASIBILITY -->
+                <section id="evaluation" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Performance Evaluation & Acceptance Criteria</h2>
+                            <p class="text-xs text-slate-400">Table 9. Observed acceptance criteria and performance measurement methodology</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Experiment Scenario</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Expected Observation / Acceptance Criterion</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Service Registration</td>
+                                    <td class="px-4 py-3 text-emerald-400 font-mono">A registered service appears in Consul catalog with expected ID, address, port, and provider metadata.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Service Discovery</td>
+                                    <td class="px-4 py-3 text-emerald-400 font-mono">A logical lookup query returns the expected matching active service instances.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Healthy Instance State</td>
+                                    <td class="px-4 py-3 text-emerald-400 font-mono">A running service reports passing state according to its configured <code>/health</code> check.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Service Failure Detection</td>
+                                    <td class="px-4 py-3 text-amber-400 font-mono">A stopped or failing service transitions to critical after the configured interval (3 checks).</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Service Recovery</td>
+                                    <td class="px-4 py-3 text-emerald-400 font-mono">A restarted service returns to passing state and becomes available for discovery queries again.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Multiple Instance Disambiguation</td>
+                                    <td class="px-4 py-3 text-slate-300 font-mono">Instances with the same logical service name are distinguished by unique Instance IDs.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Consul Outage Handling</td>
+                                    <td class="px-4 py-3 text-rose-400 font-mono">The backend returns a clear 503 error and the dashboard explicitly alerts unavailable registry state.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Timing Benchmarks</td>
+                                    <td class="px-4 py-3 text-slate-300 font-mono">Report discovery latency (~2-5ms local) and health detection delay (~5-15s based on interval).</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 10. SIMULATION AND SYSTEM-LEVEL ANALYSIS -->
+                <section id="simulation-analysis" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            10
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">10. Simulation & System-Level Analysis</h2>
+                            <p class="text-xs text-slate-400">Queueing model, component execution path, and analytical boundaries</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            For system-level analysis, the overall discovery and request execution path is represented as a sequential queueing model:
+                        </p>
+                        <div class="p-4 rounded-xl bg-slate-950 font-mono text-xs text-slate-300 border border-slate-800 text-center">
+                            Client Request &rarr; Express Backend API &rarr; Consul Registry Lookup &rarr; Target Service Dispatch &rarr; Response
+                        </div>
+                        <p>
+                            Simulation tests run against local Docker containers illustrate queueing behavior under varying discovery query rates. Results collected from local prototypes reflect local bridge networking and single-host scheduling rather than wide-area commercial cloud latencies.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 11. RISKS AND LIMITATIONS -->
+                <section id="risks" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            11
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">11. Risks & Planned Mitigations</h2>
+                            <p class="text-xs text-slate-400">Table 11. Risk assessment matrix and mitigation strategies</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800 w-1/3">Identified Risk</th>
+                                    <th class="px-4 py-3 border-b border-slate-800 w-2/3">Planned Mitigation Strategy</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Provider labels mistaken for real cloud deployment</td>
+                                    <td class="px-4 py-3 text-slate-400">Clearly document the local Docker container scope and designate multi-cloud WAN peering as future work.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Stale or unreachable service address</td>
+                                    <td class="px-4 py-3 text-slate-400">Test network reachability from client context and ensure Consul catalog returns reachable container IPs.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Incorrect health status reporting</td>
+                                    <td class="px-4 py-3 text-slate-400">Configure HTTP health check endpoints explicitly; test simulated failure and recovery scenarios repeatedly.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Consul service registry unavailable</td>
+                                    <td class="px-4 py-3 text-slate-400">Implement explicit backend timeouts and display prominent error alerts in the dashboard UI.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Duplicate service registrations</td>
+                                    <td class="px-4 py-3 text-slate-400">Enforce unique <code>service_id</code> generation and validate registration payloads before sending to Consul.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Unauthorized registry access</td>
+                                    <td class="px-4 py-3 text-slate-400">Restrict local network bindings, configure ACL tokens, and protect management endpoints.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Frontend UI remains hard-coded</td>
+                                    <td class="px-4 py-3 text-slate-400">Connect UI component state dynamically to Express backend REST API endpoints.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">Overstated reliability or scalability</td>
+                                    <td class="px-4 py-3 text-slate-400">Differentiate measured local prototype metrics from theoretical enterprise production scale.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 12. CONCLUSION -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            12
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">12. Conclusion</h2>
+                            <p class="text-xs text-slate-400">Final engineering summary</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The <strong class="text-white">Cross-Cloud Service Discovery Registry</strong> project presents a complete System Design solution for managing dynamic service instances across multi-provider cloud topologies. By leveraging HashiCorp Consul, a Node.js/Express API, and containerized microservices labeled for AWS, GCP, and Azure, the system decouples client configurations from changing network endpoints.
+                        </p>
+                        <p>
+                            The core end-to-end path—encompassing service registration, dynamic catalog maintenance, recurring health checks, client discovery lookups, and fault isolation—is verified through local containerized testing. The local prototype provides a practical model for learning service registry mechanics, eventual consistency, health-check probing, and fault handling in microservice architectures.
+                        </p>
+                    </div>
+
+                    <!-- Author Signature Card -->
+                    <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between flex-wrap gap-3 text-xs">
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Course Project</span>
+                            <span class="text-white font-bold">PS 20 – Cross-Cloud Service Discovery Registry</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Engineering Authors</span>
+                            <span class="text-white font-semibold">Swarangi S. Savekar (67) &amp; Ketaki A. Patil (70)</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-slate-400 block text-[10px] uppercase">Status</span>
+                            <span class="text-brand-emerald font-mono font-bold">System Prototype Complete</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 13. LIVE CROSS-CLOUD SERVICE DISCOVERY & CONSUL REGISTRY SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Live Consul Service Discovery Registry Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Register multi-cloud instances, simulate client discovery, and test fault injection scenarios</p>
+                            </div>
+                        </div>
+
+                        <!-- Presets / Quick Reset -->
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simPresetLoadData" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-cloud-arrow-up text-brand-indigo mr-1"></i> Load Default Services
+                            </button>
+                            <button id="simResetEngine" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset Registry
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Inputs & Controls -->
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+                        <!-- Left Column: Registration Form & Client Discovery Lookup -->
+                        <div class="lg:col-span-6 space-y-5">
+                            
+                            <!-- Form Box: Register Service -->
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-plus-circle text-brand-emerald"></i> Register Microservice Instance
+                                </h3>
+
+                                <div class="grid grid-cols-2 gap-3 text-xs">
+                                    <div>
+                                        <label class="block text-slate-400 mb-1 font-semibold">Logical Service Name</label>
+                                        <select id="regServiceName" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                            <option value="payment-service">payment-service</option>
+                                            <option value="user-service">user-service</option>
+                                            <option value="order-service">order-service</option>
+                                            <option value="inventory-service">inventory-service</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-400 mb-1 font-semibold">Instance ID</label>
+                                        <input type="text" id="regInstanceId" placeholder="e.g. payment-03" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-400 mb-1 font-semibold">Cloud Provider</label>
+                                        <select id="regProvider" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                            <option value="AWS">AWS Cloud</option>
+                                            <option value="GCP">GCP Cloud</option>
+                                            <option value="Azure">Azure Cloud</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="block text-slate-400 mb-1 font-semibold">Port Number</label>
+                                        <input type="number" id="regPort" placeholder="8003" value="8003" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    </div>
+                                </div>
+
+                                <button id="btnRegisterInstance" class="w-full py-2.5 rounded-xl bg-brand-indigo hover:bg-indigo-600 text-white font-bold text-xs shadow-glow-indigo transition flex items-center justify-center gap-2">
+                                    <i class="fa-solid fa-server"></i> Register Instance with Consul
+                                </button>
+                            </div>
+
+                            <!-- Form Box: Client Discovery Query Simulator -->
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-magnifying-glass-location text-brand-violet"></i> Client Service Discovery Query
+                                </h3>
+
+                                <div class="flex items-center gap-3 text-xs">
+                                    <select id="queryServiceName" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-violet">
+                                        <option value="payment-service">Query: payment-service</option>
+                                        <option value="user-service">Query: user-service</option>
+                                        <option value="order-service">Query: order-service</option>
+                                        <option value="inventory-service">Query: inventory-service</option>
+                                    </select>
+                                    <button id="btnRunDiscovery" class="px-5 py-2 rounded-lg bg-brand-violet hover:bg-violet-600 text-white font-bold text-xs shadow-glow-violet transition whitespace-nowrap">
+                                        Run Query
+                                    </button>
+                                </div>
+
+                                <!-- Discovery Result Display -->
+                                <div id="discoveryResultBox" class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono space-y-1 text-slate-300 min-h-[60px]">
+                                    <div class="text-slate-500 italic">Select a service and click "Run Query" to discover endpoints...</div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- Right Column: Fault Injection & Consul Catalog View -->
+                        <div class="lg:col-span-6 space-y-5">
+                            
+                            <!-- Fault Injection Panel -->
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3">
+                                <h3 class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                    <i class="fa-solid fa-burst text-brand-rose"></i> Fault Injection Engine
+                                </h3>
+
+                                <div class="grid grid-cols-2 gap-2 text-xs">
+                                    <button id="btnFaultCrash" class="p-2.5 rounded-xl bg-slate-900 hover:bg-brand-rose/20 text-slate-200 border border-slate-800 hover:border-brand-rose/40 font-semibold transition text-left space-y-1">
+                                        <div class="text-brand-rose font-bold flex items-center gap-1.5">
+                                            <i class="fa-solid fa-power-off"></i> Crash Instance
+                                        </div>
+                                        <div class="text-[10px] text-slate-400">Triggers 500 error on /health</div>
+                                    </button>
+                                    <button id="btnFaultConsulOutage" class="p-2.5 rounded-xl bg-slate-900 hover:bg-brand-amber/20 text-slate-200 border border-slate-800 hover:border-brand-amber/40 font-semibold transition text-left space-y-1">
+                                        <div class="text-brand-amber font-bold flex items-center gap-1.5">
+                                            <i class="fa-solid fa-plug-circle-xmark"></i> Consul Outage
+                                        </div>
+                                        <div class="text-[10px] text-slate-400">Simulates HTTP 503 cluster failure</div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Consul Catalog Inventory View -->
+                            <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-3 flex flex-col justify-between min-h-[260px]">
+                                <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                    <span class="font-bold text-white text-xs flex items-center gap-2">
+                                        <i class="fa-solid fa-database text-brand-cyan"></i> Live Consul Catalog Registry State
+                                    </span>
+                                    <span id="simConsulHealthBadge" class="text-[9px] px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-bold">
+                                        CONSUL: ONLINE
+                                    </span>
+                                </div>
+
+                                <div id="catalogList" class="space-y-2 max-h-[220px] overflow-y-auto text-xs font-mono">
+                                    <div class="text-slate-500 text-center py-8">No instances registered. Click "Load Default Services" above.</div>
+                                </div>
+
+                                <div class="text-[10px] text-slate-500 text-right pt-1 border-t border-slate-900">
+                                    Dynamic Port &amp; Health Probe Monitoring
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <!-- Execution Trace Output Log -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <span class="text-slate-400 font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-brand-emerald"></i> Consul Execution &amp; Discovery Event Log
+                            </span>
+                            <span class="text-[10px] text-slate-500">Real-Time Trace</span>
+                        </div>
+                        <div id="simTraceLog" class="min-h-[100px] max-h-[140px] overflow-y-auto space-y-1 text-slate-300">
+                            <div class="text-slate-500 italic">Simulator ready. Register instances or trigger discovery queries above.</div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">C</div>
+                <span class="text-slate-300 font-semibold">Cross cloud service discovery Registry</span>
+            </div>
+            <div class="text-slate-400">
+                PS 20 | Authors: Swarangi S. Savekar (67) &amp; Ketaki A. Patil (70)
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: SIMULATOR & INTERACTIVE UI -->
+    <script>
+        // --- 1. PROGRESS BAR & SCROLLSPY ---
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) {
+                    current = sec.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // --- 2. MOBILE TOC DRAWER ---
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // --- 3. ARCHITECTURE DIAGRAM TABS ---
+        document.querySelectorAll('.arch-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.arch-tab').forEach(b => {
+                    b.classList.remove('active', 'bg-brand-indigo', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('active', 'bg-brand-indigo', 'text-white');
+                btn.classList.remove('text-slate-400');
+
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.arch-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById('arch-' + tab).classList.remove('hidden');
+            });
+        });
+
+        // --- 4. LIVE IN-PAGE SEARCH ---
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            if (val.length > 0) clearSearch.classList.remove('hidden');
+            else clearSearch.classList.add('hidden');
+        });
+
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- 5. INTERACTIVE CONSUL SERVICE DISCOVERY SIMULATOR ---
+        class ConsulRegistrySimulator {
+            constructor() {
+                this.consulOnline = true;
+                this.catalog = [];
+                this.traceLogs = [];
+            }
+
+            logTrace(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let colorClass = 'text-slate-300';
+                if (type === 'success') colorClass = 'text-brand-emerald font-semibold';
+                if (type === 'warn') colorClass = 'text-brand-amber';
+                if (type === 'error') colorClass = 'text-brand-rose';
+                if (type === 'step') colorClass = 'text-brand-indigo font-mono';
+
+                this.traceLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.traceLogs.length > 30) this.traceLogs.pop();
+                this.renderUI();
+            }
+
+            registerInstance(serviceName, instanceId, provider, port) {
+                if (!this.consulOnline) {
+                    return this.logTrace('REGISTRATION REJECTED: Consul cluster is offline (HTTP 503)!', 'error');
+                }
+
+                if (!instanceId) {
+                    instanceId = `${serviceName}-${Math.floor(Math.random() * 89 + 10)}`;
+                }
+
+                const existingIdx = this.catalog.findIndex(i => i.id === instanceId);
+                const instanceData = {
+                    name: serviceName,
+                    id: instanceId,
+                    provider: provider,
+                    port: port || 8000,
+                    status: 'passing',
+                    healthUrl: `http://${serviceName}:${port}/health`
+                };
+
+                if (existingIdx >= 0) {
+                    this.catalog[existingIdx] = instanceData;
+                    this.logTrace(`Updated instance '${instanceId}' metadata in Consul Catalog (${provider}).`, 'info');
+                } else {
+                    this.catalog.push(instanceData);
+                    this.logTrace(`Registered new instance '${instanceId}' [${provider}] under '${serviceName}' on port ${port}.`, 'success');
+                }
+
+                this.renderUI();
+            }
+
+            loadDefaultServices() {
+                this.catalog = [];
+                this.registerInstance('payment-service', 'payment-01', 'GCP', 8002);
+                this.registerInstance('payment-service', 'payment-02', 'AWS', 8002);
+                this.registerInstance('user-service', 'user-01', 'AWS', 8001);
+                this.registerInstance('order-service', 'order-01', 'Azure', 8004);
+                this.registerInstance('inventory-service', 'inventory-01', 'Azure', 8005);
+                this.logTrace('Loaded default multi-cloud microservice catalog.', 'info');
+            }
+
+            queryService(serviceName) {
+                if (!this.consulOnline) {
+                    document.getElementById('discoveryResultBox').innerHTML = `<div class="text-brand-rose font-bold">HTTP 503 Service Unavailable: Consul cluster unreachable.</div>`;
+                    return this.logTrace(`DISCOVERY ERROR: Consul cluster unreachable for query '${serviceName}'.`, 'error');
+                }
+
+                const matches = this.catalog.filter(i => i.name === serviceName && i.status === 'passing');
+                
+                this.logTrace(`DISCOVERY QUERY &rarr; Logical Name: '${serviceName}'`, 'step');
+
+                if (matches.length === 0) {
+                    document.getElementById('discoveryResultBox').innerHTML = `<div class="text-brand-amber font-bold">No healthy instances found for service: '${serviceName}'</div>`;
+                    return this.logTrace(`DISCOVERY MISS: 0 healthy targets available for '${serviceName}'.`, 'warn');
+                }
+
+                // Load Balancer Selects round-robin or first healthy target
+                const selected = matches[Math.floor(Math.random() * matches.length)];
+
+                document.getElementById('discoveryResultBox').innerHTML = `
+                    <div class="text-brand-emerald font-bold mb-1">FOUND ${matches.length} HEALTHY INSTANCE(S):</div>
+                    <div>Target Address: <span class="text-white">${selected.name}.internal</span> | Port: <span class="text-brand-cyan">${selected.port}</span></div>
+                    <div>Instance ID: <span class="text-white">${selected.id}</span> | Provider: <span class="text-brand-amber">${selected.provider}</span></div>
+                `;
+
+                this.logTrace(`DISCOVERY SUCCESS &rarr; Selected Endpoint '${selected.id}' (${selected.provider}:${selected.port}).`, 'success');
+            }
+
+            toggleCrashInstance() {
+                if (this.catalog.length === 0) return this.logTrace('No registered instances to crash.', 'warn');
+                
+                // Crash the first passing instance
+                const target = this.catalog.find(i => i.status === 'passing') || this.catalog[0];
+                target.status = target.status === 'passing' ? 'critical' : 'passing';
+
+                if (target.status === 'critical') {
+                    this.logTrace(`CRASH INJECTED: Instance '${target.id}' health probe failed (HTTP 500). Status: CRITICAL.`, 'error');
+                } else {
+                    this.logTrace(`RECOVERY: Instance '${target.id}' restarted. Health status: PASSING.`, 'success');
+                }
+
+                this.renderUI();
+            }
+
+            toggleConsulOutage() {
+                this.consulOnline = !this.consulOnline;
+                if (!this.consulOnline) {
+                    this.logTrace('CLUSTER OUTAGE: Consul Leader connection lost! HTTP 503 triggered.', 'error');
+                } else {
+                    this.logTrace('CLUSTER RECOVERY: Consul Raft consensus restored. Cluster ONLINE.', 'success');
+                }
+                this.renderUI();
+            }
+
+            reset() {
+                this.catalog = [];
+                this.consulOnline = true;
+                this.traceLogs = [];
+                document.getElementById('discoveryResultBox').innerHTML = `<div class="text-slate-500 italic">Select a service and click "Run Query" to discover endpoints...</div>`;
+                this.logTrace('Consul Registry state reset to clean state.', 'info');
+            }
+
+            renderUI() {
+                // Consul Status Badge
+                const badge = document.getElementById('simConsulHealthBadge');
+                if (this.consulOnline) {
+                    badge.innerText = 'CONSUL: ONLINE';
+                    badge.className = 'text-[9px] px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-bold';
+                } else {
+                    badge.innerText = 'CONSUL: DISCONNECTED (503)';
+                    badge.className = 'text-[9px] px-2.5 py-0.5 rounded-full bg-brand-rose/20 text-brand-rose font-mono font-bold';
+                }
+
+                // Render Catalog List
+                const list = document.getElementById('catalogList');
+                if (!this.consulOnline) {
+                    list.innerHTML = `<div class="text-brand-rose text-center py-8 font-bold">Consul Cluster Unreachable (503 Service Unavailable)</div>`;
+                } else if (this.catalog.length === 0) {
+                    list.innerHTML = `<div class="text-slate-500 text-center py-8">No instances registered. Click "Load Default Services" above.</div>`;
+                } else {
+                    list.innerHTML = this.catalog.map(inst => `
+                        <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+                            <div class="space-y-0.5">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-white font-bold">${inst.id}</span>
+                                    <span class="text-[9px] px-1.5 py-0.2 rounded ${inst.provider === 'AWS' ? 'bg-brand-amber/20 text-amber-300' : inst.provider === 'GCP' ? 'bg-brand-indigo/20 text-indigo-300' : 'bg-brand-cyan/20 text-cyan-300'} font-bold">${inst.provider}</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400">${inst.name} | Port: ${inst.port}</div>
+                            </div>
+                            <div>
+                                <span class="text-[10px] px-2 py-0.5 rounded-full ${inst.status === 'passing' ? 'bg-brand-emerald/20 text-brand-emerald' : 'bg-brand-rose/20 text-brand-rose'} font-bold uppercase">
+                                    ${inst.status}
+                                </span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+
+                document.getElementById('simTraceLog').innerHTML = this.traceLogs.join('');
+            }
+        }
+
+        const sim = new ConsulRegistrySimulator();
+
+        document.getElementById('btnRegisterInstance').addEventListener('click', () => {
+            const name = document.getElementById('regServiceName').value;
+            const id = document.getElementById('regInstanceId').value.trim();
+            const provider = document.getElementById('regProvider').value;
+            const port = document.getElementById('regPort').value;
+            sim.registerInstance(name, id, provider, port);
+        });
+
+        document.getElementById('btnRunDiscovery').addEventListener('click', () => {
+            const name = document.getElementById('queryServiceName').value;
+            sim.queryService(name);
+        });
+
+        document.getElementById('btnFaultCrash').addEventListener('click', () => sim.toggleCrashInstance());
+        document.getElementById('btnFaultConsulOutage').addEventListener('click', () => sim.toggleConsulOutage());
+        document.getElementById('simPresetLoadData').addEventListener('click', () => sim.loadDefaultServices());
+        document.getElementById('simResetEngine').addEventListener('click', () => sim.reset());
+    </script>
+</body>
+</html>

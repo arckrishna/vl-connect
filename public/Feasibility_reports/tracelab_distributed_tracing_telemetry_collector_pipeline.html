@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="TraceLab feasibility study for a distributed tracing and telemetry collector pipeline.">
+<title>TraceLab – Distributed Tracing &amp; Telemetry Collector Pipeline</title>
+<style>
+:root{--bg:#f4f7fb;--surface:#fff;--ink:#172338;--muted:#64748b;--line:#e4eaf2;--accent:#2563eb;--teal:#0f766e;--soft:#eff6ff;--shadow:0 12px 32px rgba(25,45,80,.07)}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.7 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+.layout{max-width:1460px;margin:auto;display:grid;grid-template-columns:270px minmax(0,1fr);gap:28px;padding:28px}
+.sidebar{position:sticky;top:24px;align-self:start;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow)}
+.brand{font-size:12px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}
+.sidebar h2{font-size:17px;line-height:1.4;margin:0 0 18px}.nav{display:grid;gap:4px;max-height:76vh;overflow:auto}
+.nav a{text-decoration:none;color:#53627a;padding:7px 10px;border-radius:9px;font-size:12px;font-weight:650}
+.nav a:hover{background:var(--soft);color:var(--accent)}.content{min-width:0}
+.hero{position:relative;overflow:hidden;background:linear-gradient(120deg,#10294e,#1d4f91 65%,#0f766e);color:#fff;border-radius:22px;padding:43px 44px;margin-bottom:22px;box-shadow:var(--shadow)}
+.hero:after{content:"";position:absolute;width:310px;height:310px;border:1px solid rgba(255,255,255,.16);border-radius:50%;right:-80px;top:-140px;box-shadow:0 0 0 35px rgba(255,255,255,.035),0 0 0 75px rgba(255,255,255,.025)}
+.eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#bfdbfe;font-weight:800}
+.hero h1{font-size:clamp(28px,4vw,43px);line-height:1.12;max-width:900px;margin:12px 0}
+.hero p{color:#dbeafe;max-width:850px;margin:0;font-size:16px}
+.chip{display:inline-flex;margin-top:22px;padding:6px 11px;border:1px solid rgba(255,255,255,.25);border-radius:999px;font-size:12px;color:#e0f2fe}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:28px 30px;margin-bottom:18px;box-shadow:var(--shadow)}
+.section-head{display:flex;align-items:center;gap:13px;margin-bottom:16px}.num{display:grid;place-items:center;width:36px;height:36px;flex:0 0 36px;border-radius:11px;background:var(--soft);color:var(--accent);font-weight:800;font-size:13px}
+h2{font-size:21px;line-height:1.3;margin:0}h3{font-size:16px;margin:21px 0 8px}
+p{margin:10px 0;color:#475569}.lead{font-size:16px;color:#334155}ul,ol{padding-left:22px;color:#475569;margin:10px 0}li{padding:3px 0}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;margin-top:16px}
+table{width:100%;border-collapse:collapse;min-width:650px;text-align:left}th{background:#f7f9fc;color:#52627a;font-size:12px;text-transform:uppercase;letter-spacing:.06em}
+th,td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}tr:last-child td{border-bottom:0}td{color:#405069;font-size:13px}
+.note{background:#f0fdfa;border-left:3px solid var(--teal);padding:13px 16px;border-radius:0 10px 10px 0;color:#285b57;margin-top:16px}
+.status{display:flex;flex-wrap:wrap;gap:10px;margin:18px 0}.status span{background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:10px 13px;font-size:13px;color:#475569}
+.flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:14px 0;padding:14px;background:#f8fafc;border:1px solid var(--line);border-radius:12px}
+.flow span{background:#fff;border:1px solid #dbe5f1;border-radius:8px;padding:7px 10px;font-weight:700;color:#315078;font-size:12px}.flow b{color:var(--accent)}
+.conclusion{background:linear-gradient(120deg,#eff6ff,#f0fdfa);border:1px solid #d9e8f8}
+.footer{text-align:center;color:#8a97aa;font-size:12px;padding:10px 0 22px}
+a{color:#2563eb}code{background:#f1f5f9;padding:2px 5px;border-radius:5px}
+@media(max-width:950px){.layout{grid-template-columns:1fr;padding:16px;gap:16px}.sidebar{position:static;padding:16px}.sidebar h2{margin-bottom:10px}.nav{display:flex;overflow-x:auto;max-height:none;padding-bottom:3px}.nav a{white-space:nowrap}.hero{padding:32px 26px}}
+@media(max-width:650px){.card{padding:21px 18px}.hero{border-radius:16px}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+ <div class="brand">Virtual Lab · Feasibility</div>
+ <h2>TraceLab – Distributed Tracing &amp; Telemetry Collector Pipeline</h2>
+ <nav class="nav" aria-label="Page sections">
+  <a href="#decision">Executive decision</a><a href="#summary">Executive summary</a><a href="#overview">Project overview</a>
+  <a href="#scope">Scope &amp; assumptions</a><a href="#technical">Technical feasibility</a><a href="#operational">Operational feasibility</a>
+  <a href="#economic">Economic feasibility</a><a href="#schedule">Schedule feasibility</a><a href="#alternatives">Alternatives</a>
+  <a href="#risks">Risks &amp; mitigation</a><a href="#evaluation">Evaluation plan</a><a href="#recommendation">Recommendation</a><a href="#references">References</a>
+ </nav>
+</aside>
+<main class="content">
+<header class="hero">
+ <div class="eyebrow">Academic Project Documentation · 2026</div>
+ <h1>TraceLab</h1>
+ <p>Distributed Tracing &amp; Telemetry Collector Pipeline</p>
+ <span class="chip">Local browser simulation · Feasibility study</span>
+</header>
+
+<section class="card" id="decision">
+ <div class="section-head"><span class="num">01</span><h2>Executive Decision</h2></div>
+ <p class="lead"><strong>TraceLab is feasible as a local, browser-based teaching simulation.</strong></p>
+ <p>Its strongest value is making telemetry-pipeline trade-offs observable without requiring a permanent cloud deployment. The immediate submission can be completed with architecture documentation, controlled experiments and a transparent observation record. Production-grade deployment is a separate future scope.</p>
+ <div class="status"><span><strong>Environment:</strong> Local Simulation</span><span><strong>Status shown:</strong> Idle</span><span><strong>Progress:</strong> 7%</span><span><strong>Procedure:</strong> 0/15</span><span><strong>Simulation:</strong> Not run</span><span><strong>Observation:</strong> No data</span></div>
+ <div class="note">The feasibility verdict is based on the stated system design and lab preview, not on measured experiment results. The preview status above is the status recorded in the source report.</div>
+</section>
+
+<section class="card" id="summary">
+ <div class="section-head"><span class="num">02</span><h2>Executive Summary</h2></div>
+ <p>TraceLab is a Distributed Tracing Virtual Lab for studying how telemetry generated by an application passes through a collector pipeline and reaches a trace backend. It models an instrumented service graph, OTLP transport, a load balancer, two collector replicas, a trace backend and explorer, and a separate collector self-monitoring path.</p>
+ <p>The learner is expected to change sampling, batching, queue capacity and failure conditions, run the simulation, and compare the resulting visibility and pipeline behaviour.</p>
+ <p>The project is technically feasible because the principal concepts map to established observability patterns: application instrumentation produces spans, OTLP transfers telemetry, and a Collector pipeline receives, processes and exports data. The main implementation risk is ensuring that the simulator represents queueing, drops, retries and failure recovery consistently and explains its limits.</p>
+</section>
+
+<section class="card" id="overview">
+ <div class="section-head"><span class="num">03</span><h2>Project Overview</h2></div>
+ <p>Modern user requests often cross multiple services. A slow or failed request cannot reliably be explained from one service log because each component sees only part of the request. Distributed tracing records spans connected by trace and parent-span identifiers. Those spans must then be delivered, processed, buffered and exported by a telemetry pipeline. If the collector is overloaded or the backend becomes unavailable, observability data can be delayed or dropped.</p>
+ <h3>Problem Statement</h3>
+ <p class="lead">Design and evaluate a simulated telemetry collection pipeline that accepts spans from instrumented microservices, distributes traffic across collector replicas, applies sampling and batching, buffers and retries exports within bounded capacity, and exposes collection health through a separate metrics-monitoring path.</p>
+ <h3>Aim</h3>
+ <p>To study and simulate a distributed tracing and telemetry collection pipeline, understand how traces flow across microservices and OpenTelemetry Collectors, and evaluate the impact of sampling, batching, collector capacity and component failures on telemetry collection.</p>
+ <h3>Objectives</h3>
+ <ul>
+  <li>Explain trace, span and parent-child relationships across the API gateway, order, payment, inventory and database components.</li>
+  <li>Model OTLP transport from instrumented services to a collector endpoint over gRPC or HTTP.</li>
+  <li>Compare a two-replica collector cluster behind a least-buffered load balancer.</li>
+  <li>Observe the effects of head-based sampling, batch formation and bounded queues on retained telemetry.</li>
+  <li>Inject overload or component failures and record queue utilisation, exported spans, dropped spans and recovery behaviour where the simulator exposes them.</li>
+  <li>Use collector self-monitoring signals to connect pipeline health to a monitoring dashboard.</li>
+  <li>Produce a reproducible observation table and a report that distinguishes simulated outputs from real deployment measurements.</li>
+ </ul>
+</section>
+
+<section class="card" id="scope">
+ <div class="section-head"><span class="num">04</span><h2>Scope and Assumptions</h2></div>
+ <div class='table-wrap'><table><thead><tr><th>In scope</th><th>Out of scope for the current project</th></tr></thead><tbody><tr><td>Browser-based local simulation and guided experiments.</td><td>Production deployment across real hosts or cloud regions.</td></tr><tr><td>Instrumented example services and trace/span context flow.</td><td>A production application, real customer traffic or private production data.</td></tr><tr><td>OTLP endpoint using a conceptual gRPC/HTTP path.</td><td>Full interoperability certification across every OTLP implementation.</td></tr><tr><td>Two simulated Collector replicas and least-buffered load balancing.</td><td>Production high availability, autoscaling and multi-zone disaster recovery.</td></tr><tr><td>Sampling, batching, bounded queue capacity and retry/failure scenarios.</td><td>Guarantees of zero telemetry loss under every failure mode.</td></tr><tr><td>Trace backend/explorer and a Prometheus-compatible simulated metrics path.</td><td>A claim that an actual backend or Prometheus server is deployed.</td></tr><tr><td>Quantitative observations captured from runs once completed.</td><td>Any performance numbers not recorded by the lab.</td></tr></tbody></table></div>
+ <h3>Assumptions</h3>
+ <ul>
+  <li>The system is intended for learning and design evaluation, not production service-level guarantees.</li>
+  <li>The current component diagram is a simulator model; labels such as OTLP, least-buffered and Prometheus-compatible describe design concepts unless validated against implementation details.</li>
+  <li>The team can execute the lab in a supported modern browser and capture its observations or screenshots.</li>
+  <li><strong>Evidence rule:</strong> all numeric results will be reported only after the Simulation and Observation sections are completed.</li>
+ </ul>
+</section>
+
+<section class="card" id="technical">
+ <div class="section-head"><span class="num">05</span><h2>Technical Feasibility</h2></div>
+ <div class='table-wrap'><table><thead><tr><th>Component</th><th>Feasibility</th><th>Reason / validation needed</th></tr></thead><tbody><tr><td>Trace/span model and context propagation</td><td>High</td><td>Standard distributed-tracing concepts; verify parent-child links remain connected across the example service graph.</td></tr><tr><td>OTLP transport abstraction</td><td>High</td><td>OTLP supports telemetry exchange between sources, collectors and backends; simulator should label gRPC/HTTP transport clearly.</td></tr><tr><td>Collector receiver-processor-exporter pipeline</td><td>High</td><td>Matches the documented Collector pipeline model; verify each stage affects the simulation state consistently.</td></tr><tr><td>Sampling and batching</td><td>High</td><td>Straightforward to model; test retained volume and batch flush behaviour while keeping request latency assumptions explicit.</td></tr><tr><td>Bounded queue and retries</td><td>Moderate to high</td><td>Important edge cases are queue-full, delayed backend, retry limits and recovery; the simulator should not imply unlimited buffering.</td></tr><tr><td>Two replicas and load balancing</td><td>Moderate</td><td>Useful for comparing load distribution; the least-buffered policy needs a defined queue-load metric and deterministic tie-break.</td></tr><tr><td>Collector self-monitoring</td><td>Moderate</td><td>Metrics and dashboard are shown as simulated; specify the relationship between counters/gauges and pipeline events.</td></tr><tr><td>Failure injection and recovery</td><td>Moderate</td><td>Requires deterministic scenarios so the same settings can be rerun and compared reliably.</td></tr></tbody></table></div>
+ <div class="note"><strong>Technical verdict: Feasible.</strong> The highest-value engineering checks are trace-context continuity, consistent counter accounting, bounded queue semantics and deterministic recovery after the backend or a collector becomes unavailable.</div>
+</section>
+
+<section class="card" id="operational">
+ <div class="section-head"><span class="num">06</span><h2>Operational Feasibility</h2></div>
+ <p>Operational feasibility is high for the current scope because the stated environment is a local browser simulation. The learner does not need to provision cloud VMs, configure production credentials or maintain an always-on service.</p>
+ <p>The lab should provide an experiment reset, help text, a clear distinction between the primary telemetry path and self-monitoring path, and a way to capture the selected configuration and output metrics.</p>
+ <ul>
+  <li><strong>Skills needed:</strong> basic distributed-systems concepts, reading a trace tree, interpreting counters and percentages, and following the lab procedure.</li>
+  <li><strong>Operational control:</strong> reset the experiment between scenarios and preserve a run record containing configuration, timestamp, outcome and limitations.</li>
+  <li><strong>Maintainability:</strong> separate simulation logic, visual state and explanatory text so that a visual change does not silently change the experiment model.</li>
+ </ul>
+</section>
+
+<section class="card" id="economic">
+ <div class="section-head"><span class="num">07</span><h2>Economic Feasibility</h2></div>
+ <p>For the local-simulation scope, the direct infrastructure cost is expected to be negligible beyond a computer and internet access for opening the lab. The supplied design does not require a permanent cloud deployment. Open-source observability components could be used in a later prototype, but real deployment would introduce hosting, storage, network, monitoring and maintenance costs that are outside this feasibility estimate.</p>
+ <div class='table-wrap'><table><thead><tr><th>Option</th><th>Expected cost profile</th><th>Assessment</th></tr></thead><tbody><tr><td>Local browser simulation</td><td>No dedicated server required; ordinary device and connectivity only.</td><td>Recommended for the current academic deliverable.</td></tr><tr><td>Local container-based prototype</td><td>Uses local CPU, memory and disk; software licensing cost may be zero for open-source components.</td><td>Useful future validation step; requires setup and troubleshooting.</td></tr><tr><td>Hosted multi-component deployment</td><td>Cloud compute, network transfer, persistent storage and operational monitoring may incur charges.</td><td>Not required to demonstrate the current learning objectives.</td></tr></tbody></table></div>
+</section>
+
+<section class="card" id="schedule">
+ <div class="section-head"><span class="num">08</span><h2>Schedule Feasibility</h2></div>
+ <p>An indicative four-week plan is reasonable for a student project if the virtual lab already provides the stated interface and the team focuses on procedure completion, testing, observation and documentation. This is a proposed plan, not a statement that these activities have been completed.</p>
+ <div class='table-wrap'><table><thead><tr><th>Period</th><th>Planned work</th><th>Exit evidence</th></tr></thead><tbody><tr><td>Week 1</td><td>Confirm scope, architecture, concepts and evaluation metrics.</td><td>Approved aim/objectives, component list and run sheet.</td></tr><tr><td>Week 2</td><td>Complete baseline procedure; validate trace flow, sampling and batching experiments.</td><td>Baseline record and first comparison run.</td></tr><tr><td>Week 3</td><td>Test capacity pressure and failure/recovery scenarios; repeat runs.</td><td>Observation table, screenshots and anomalies log.</td></tr><tr><td>Week 4</td><td>Analyse results, state limitations, finish report and demo narrative.</td><td>Final report, architecture figure and reproducible demonstration.</td></tr></tbody></table></div>
+</section>
+
+<section class="card" id="alternatives">
+ <div class="section-head"><span class="num">09</span><h2>Alternatives Considered</h2></div>
+ <div class='table-wrap'><table><thead><tr><th>Approach</th><th>Fidelity</th><th>Effort / risk</th><th>Decision</th></tr></thead><tbody><tr><td>Local simulation only</td><td>Repeatable, safe for learning; limited realism for real network and process behaviour.</td><td>Low cost and low deployment effort; accuracy depends on the simulation model.</td><td>Recommended current scope.</td></tr><tr><td>Local real Collector prototype</td><td>Uses actual Collector behaviour but only local network conditions unless latency/failures are introduced.</td><td>Moderate setup and debugging effort.</td><td>Good extension after simulator baseline.</td></tr><tr><td>Production-like multi-host deployment</td><td>More realistic failure and queueing behaviour.</td><td>Higher effort, hosting cost, security and operations burden.</td><td>Defer; not necessary for the stated lab.</td></tr><tr><td>Use a managed observability service only</td><td>Can provide a trace UI but may hide the collector mechanisms under study.</td><td>Lower setup effort but reduced control over experiments.</td><td>Not preferred as the core teaching model.</td></tr></tbody></table></div>
+</section>
+
+<section class="card" id="risks">
+ <div class="section-head"><span class="num">10</span><h2>Risks and Mitigation</h2></div>
+ <div class='table-wrap'><table><thead><tr><th>Risk</th><th>Likelihood / impact</th><th>Mitigation</th></tr></thead><tbody><tr><td>Simulation results are mistaken for production measurements.</td><td>Medium / High</td><td>Label every output as simulated; keep environment and scope visible in report and screenshots.</td></tr><tr><td>Queue fills and telemetry is dropped without a clear explanation.</td><td>Medium / High</td><td>Expose queue capacity, queue utilisation and drop counters; include a queue-full test.</td></tr><tr><td>Sampling hides important traces, including rare failures.</td><td>Medium / High</td><td>Compare retained volume with an unsampled baseline and document the visibility trade-off.</td></tr><tr><td>Backend outage produces unbounded retry expectations.</td><td>Medium / High</td><td>Model bounded queue capacity, retry policy and eventual drop or recovery behaviour.</td></tr><tr><td>Collector replica receives disproportionate traffic.</td><td>Medium / Medium</td><td>Record per-replica accepted/exported spans and test the least-buffered selection rule.</td></tr><tr><td>Broken parent-child context makes the trace tree misleading.</td><td>Low to Medium / High</td><td>Use a known multi-service request and assert a shared trace ID plus valid parent IDs.</td></tr><tr><td>No experiment evidence is captured before submission.</td><td>Medium / High</td><td>Prioritise baseline and two controlled experiments; preserve screenshots and export the journal if available.</td></tr></tbody></table></div>
+</section>
+
+<section class="card" id="evaluation">
+ <div class="section-head"><span class="num">11</span><h2>Evaluation Plan and Acceptance Criteria</h2></div>
+ <p>The following are proposed measurements to record. They are not claimed results. Use the exact values exposed by the lab, retain units, and record whether each number is per run, per second or cumulative.</p>
+ <div class='table-wrap'><table><thead><tr><th>Objective</th><th>Experiment</th><th>Metric to record</th><th>Acceptance / interpretation</th></tr></thead><tbody><tr><td>Baseline pipeline flow</td><td>Run default configuration without injected failures.</td><td>Generated, accepted and exported spans; end-to-end trace visibility; queue utilisation.</td><td>A known request should appear as a connected trace if it is sampled in.</td></tr><tr><td>Sampling trade-off</td><td>Change sampling probability while holding workload constant.</td><td>Sampling probability; retained / generated spans; request latency as modelled.</td><td>Retained volume should respond to sampling settings; report any latency effect shown by the simulator.</td></tr><tr><td>Batching behaviour</td><td>Compare baseline batching against a changed batch setting.</td><td>Export batch size, export count, queue level, export delay if shown.</td><td>Explain the throughput-versus-delay trade-off observed.</td></tr><tr><td>Capacity pressure</td><td>Increase input rate or reduce queue capacity.</td><td>Queue utilisation, exported spans, dropped spans, export errors.</td><td>Show where pressure accumulates and what happens when capacity is exhausted.</td></tr><tr><td>Backend failure / recovery</td><td>Disable or slow the backend, then restore it.</td><td>Queue growth, retries, drops, recovery time, final trace count.</td><td>State whether queued spans drain after recovery and which spans, if any, are lost.</td></tr><tr><td>Collector imbalance / failure</td><td>Compare per-replica load, then fail a collector if supported.</td><td>Per-replica accepted/exported spans and failure duration.</td><td>Determine whether load is redistributed and identify any loss or delay.</td></tr></tbody></table></div>
+</section>
+
+<section class="card conclusion" id="recommendation">
+ <div class="section-head"><span class="num">12</span><h2>Recommendation</h2></div>
+ <p class="lead"><strong>Proceed with TraceLab as a local-simulation project.</strong></p>
+ <p>Complete the built-in procedure and at minimum capture one baseline run plus controlled sampling and capacity/failure experiments. Use the architecture diagram and this feasibility study to explain why the pipeline components exist, but do not claim real deployment, measured production latency or zero-loss guarantees unless separate evidence is collected.</p>
+ <p>If more time is available, validate one scenario with a real OpenTelemetry Collector in a local container environment and clearly label it as a separate validation experiment.</p>
+</section>
+
+<section class="card" id="references">
+ <div class="section-head"><span class="num">13</span><h2>References</h2></div>
+ <ol>
+  <li>OpenTelemetry, <a href="https://opentelemetry.io/docs/collector/architecture/" target="_blank" rel="noopener noreferrer">Collector architecture</a> (accessed 27 October 2026).</li>
+  <li>OpenTelemetry, <a href="https://opentelemetry.io/docs/specs/otlp/" target="_blank" rel="noopener noreferrer">OTLP Specification</a> (accessed 27 October 2026).</li>
+  <li>OpenTelemetry, <a href="https://opentelemetry.io/docs/collector/components/" target="_blank" rel="noopener noreferrer">Collector components</a> (accessed 27 October 2026).</li>
+  <li>OpenTelemetry, <a href="https://opentelemetry.io/docs/collector/troubleshooting/" target="_blank" rel="noopener noreferrer">Collector troubleshooting</a> (accessed 27 October 2026).</li>
+  <li>OpenTelemetry, <a href="https://opentelemetry.io/docs/collector/resiliency/" target="_blank" rel="noopener noreferrer">Collector resiliency</a> (accessed 27 October 2026).</li>
+ </ol>
+ <p><strong>Project interface:</strong> TraceLab – Distributed Tracing Virtual Lab. Project-specific status statements in the source report are based on the lab description and screen state supplied for that report.</p>
+</section>
+<div class="footer">TraceLab · Distributed Tracing Virtual Lab · Feasibility Study · 2026</div>
+</main>
+</div>
+</body>
+</html>

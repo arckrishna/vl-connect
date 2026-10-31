@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exactly-Once Event De-duplication Engine</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.3)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+
+      .search-highlight {
+        background-color: rgba(245, 158, 11, 0.35);
+        color: #FDE68A;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    D
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Event De-duplication Engine
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">Exactly-Once Effect</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">System Design Report • Idempotent Processing</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Live Simulator</span>
+                </a>
+
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar TOC (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs max-h-[60vh] overflow-y-auto pr-1">
+                            <a href="#hero" class="toc-link block px-3 py-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">Title & Overview</a>
+                            <a href="#abstract" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">Abstract</a>
+                            <a href="#problem" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Problem statement</a>
+                            <a href="#goals" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Design goals & guarantee</a>
+                            <a href="#architecture" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Architecture & Figure 1</a>
+                            <a href="#processing" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Processing flow</a>
+                            <a href="#failures" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. Failure modes & mitigations</a>
+                            <a href="#deployment" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Deployment</a>
+                            <a href="#future" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Future work</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Conclusion</a>
+                            <a href="#simulator" class="toc-link block px-3 py-1.5 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2 mt-2">
+                                <i class="fa-solid fa-play text-xs"></i> 6. Interactive Simulation
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Metadata Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Report Metadata</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Engine Type</span>
+                                <span class="text-slate-200 font-semibold">Exactly-Once De-dup</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Architecture</span>
+                                <span class="text-slate-200 font-medium block">Ingest • Dedup • Effect • Retry</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Design Standard</span>
+                                <span class="text-brand-indigo font-mono">DesignSphere Dark</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">Title & Overview</a>
+                        <a href="#abstract" class="mobile-toc-link block py-2 text-slate-300">Abstract</a>
+                        <a href="#problem" class="mobile-toc-link block py-2 text-slate-300">1. Problem statement</a>
+                        <a href="#goals" class="mobile-toc-link block py-2 text-slate-300">2. Design goals & guarantee</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">3. Architecture & Figure 1</a>
+                        <a href="#processing" class="mobile-toc-link block py-2 text-slate-300">4. Processing flow</a>
+                        <a href="#failures" class="mobile-toc-link block py-2 text-slate-300">5. Failure modes & mitigations</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">6. Interactive Simulation</a>
+                        <a href="#deployment" class="mobile-toc-link block py-2 text-slate-300">7. Deployment</a>
+                        <a href="#future" class="mobile-toc-link block py-2 text-slate-300">8. Future work</a>
+                        <a href="#conclusion" class="mobile-toc-link block py-2 text-slate-300">9. Conclusion</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- HERO SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-shield-halved"></i> Engineering Report
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Distributed Event Pipelines
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Idempotent Effect
+                            </span>
+                        </div>
+
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Exactly-Once <span class="gradient-text">Event De-duplication Engine</span>
+                        </h1>
+
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            Transforming at-least-once distributed event delivery into an exactly-once effect through stateless de-duplication workers, in-memory caches, sharded TTL ID stores, and atomic effect transactions over high-performance durable block storage / NVMe.
+                        </p>
+
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase font-semibold">Pipeline Guarantee</span>
+                                <span class="text-white font-bold">Exactly-Once Effect</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase font-semibold">Architecture Tiers</span>
+                                <span class="text-white font-bold">Ingest • Dedup • Effect • Retry</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase font-semibold">Storage Engine</span>
+                                <span class="text-white font-bold">High-Performance Durable Block / NVMe</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase font-semibold">Simulation</span>
+                                <span class="text-white font-bold">Live 100ms Ticking Sandbox</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Live Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> View Architecture & Figure 1
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ABSTRACT -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">AB</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">Abstract</h2>
+                            <p class="text-xs text-slate-400">Executive summary of the de-duplication engine</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            Distributed event pipelines usually guarantee at-least-once delivery, which means the same event can reach a consumer more than once. This report describes a de-duplication engine that gives the pipeline an exactly-once effect: every event changes downstream state once, even when it is delivered several times. It covers the architecture, the processing flow, the main failure modes and their mitigations, and a self-contained browser simulation built to teach the concept. The simulation runs as a single static page with no backend.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 1. PROBLEM STATEMENT -->
+                <section id="problem" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">01</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Problem statement</h2>
+                            <p class="text-xs text-slate-400">Why at-least-once delivery causes duplicate execution hazards</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            Messaging systems favor at-least-once delivery because it never loses data. The cost is duplicates, and they come from several places:
+                        </p>
+                        <ul class="list-disc pl-5 space-y-2 text-xs">
+                            <li><strong>Producers retry</strong> when an acknowledgement is lost, even though the first send succeeded.</li>
+                            <li><strong>Brokers redeliver</strong> messages after a consumer crash or a partition rebalance.</li>
+                            <li><strong>Networks can repeat</strong> a packet or a request.</li>
+                        </ul>
+                        <p>
+                            Duplicates are harmful when the effect is not naturally repeatable: charging a card twice, sending a notification twice, or counting a metric twice. The engine therefore has to detect repeats and make sure the effect happens once.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 2. DESIGN GOALS AND GUARANTEE -->
+                <section id="goals" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">02</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Design goals and guarantee</h2>
+                            <p class="text-xs text-slate-400">Correctness, bounded state, scalability, and containment</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            <strong>Guarantee.</strong> The engine provides exactly-once effect, not exactly-once delivery. Events may be delivered many times, but the observable result is the same as if each had been processed once. This is achieved by combining at-least-once delivery with idempotent processing.
+                        </p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-white block mb-1">Correctness</strong>
+                                <span class="text-slate-400">No duplicate effects, even across crashes and retries.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-white block mb-1">Bounded State</strong>
+                                <span class="text-slate-400">The set of seen IDs must not grow forever, so entries expire after a TTL.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-white block mb-1">Scalability</strong>
+                                <span class="text-slate-400">The de-duplication tier scales horizontally by partitioning on the event ID.</span>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">
+                                <strong class="text-white block mb-1">Containment</strong>
+                                <span class="text-slate-400">Slow components must not cause an unbounded retry storm.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. ARCHITECTURE & FIGURE 1 -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">03</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Architecture</h2>
+                            <p class="text-xs text-slate-400">Figure 1 Architecture Diagram and Component Responsibilities</p>
+                        </div>
+                    </div>
+                    <div class="space-y-6 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            The system has four tiers: ingest, de-duplication, effect, and a failure path. Figure 1 shows the components and how events move between them.
+                        </p>
+
+                        <!-- FIGURE 1 RENDERED ARCHITECTURE DIAGRAM -->
+                        <div class="bg-slate-950 p-6 rounded-2xl border border-slate-800 space-y-4">
+                            <div class="text-center font-bold text-white text-xs uppercase tracking-wider text-brand-indigo">
+                                Figure 1 — Architecture of the de-duplication engine
+                            </div>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono">
+                                <!-- Ingest Tier -->
+                                <div class="p-4 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+                                    <div class="font-bold text-brand-cyan">1. INGEST TIER</div>
+                                    <div class="text-[11px] text-slate-300">
+                                        • Producers (Stable ID)<br>
+                                        • API Gateway (Auth/Rate limit)<br>
+                                        • Event stream (Keyed partitions)
+                                    </div>
+                                </div>
+
+                                <!-- Dedup Tier -->
+                                <div class="p-4 rounded-xl bg-brand-indigo/15 border border-brand-indigo/40 space-y-2">
+                                    <div class="font-bold text-white">2. DEDUP TIER</div>
+                                    <div class="text-[11px] text-slate-300">
+                                        • Local ID cache (Hot IDs in memory)<br>
+                                        • Dedup workers (Stateless pool)<br>
+                                        • ID store (Sharded, TTL, high-performance durable block / NVMe)
+                                    </div>
+                                </div>
+
+                                <!-- Effect Tier -->
+                                <div class="p-4 rounded-xl bg-brand-emerald/15 border border-brand-emerald/40 space-y-2">
+                                    <div class="font-bold text-emerald-300">3. EFFECT TIER</div>
+                                    <div class="text-[11px] text-slate-300">
+                                        • Record event ID (Unique ID insert)<br>
+                                        • Apply effect (Idempotent write)<br>
+                                        • Downstream sink (Sees each once)
+                                    </div>
+                                </div>
+
+                                <!-- Failure Path -->
+                                <div class="p-4 rounded-xl bg-slate-900 border border-slate-700 space-y-2">
+                                    <div class="font-bold text-brand-amber">4. FAILURE PATH</div>
+                                    <div class="text-[11px] text-slate-300">
+                                        • Retry queue (Backoff, re-enter)<br>
+                                        • Dead letter queue (Held for replay)<br>
+                                        <span class="text-brand-rose">Re-enters dedup tier on retry</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider text-brand-indigo">3.1 Components</h3>
+                        <div class="overflow-x-auto rounded-xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Component</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Role</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Key Design Choice</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Producers</td>
+                                        <td class="px-4 py-3 text-slate-400">Emit events with a stable, producer-assigned event ID and retry when an acknowledgement is missing.</td>
+                                        <td class="px-4 py-3 text-slate-400">The ID must be identical on every retry. Otherwise a duplicate cannot be told apart from a new event.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">API gateway</td>
+                                        <td class="px-4 py-3 text-slate-400">Authentication, rate limiting and request validation.</td>
+                                        <td class="px-4 py-3 text-slate-400">Shields the stream from bursts and rejects malformed events before they cost a lookup.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Event stream</td>
+                                        <td class="px-4 py-3 text-slate-400">Durable, partitioned log that decouples producers from workers.</td>
+                                        <td class="px-4 py-3 text-slate-400">Partitioned by event key so every copy of an event reaches the same worker.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Dedup workers</td>
+                                        <td class="px-4 py-3 text-slate-400">Stateless pool that checks each event ID, drops repeats and forwards new events.</td>
+                                        <td class="px-4 py-3 text-slate-400">Stateless, so they scale horizontally. Their capacity is the throughput ceiling of the dedup tier.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Local ID cache</td>
+                                        <td class="px-4 py-3 text-slate-400">In-memory cache of recently seen IDs.</td>
+                                        <td class="px-4 py-3 text-slate-400">Absorbs the common case of immediate duplicates without a network round trip.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">ID store</td>
+                                        <td class="px-4 py-3 text-slate-400">Sharded store of seen event IDs with a time-to-live (TTL).</td>
+                                        <td class="px-4 py-3 text-slate-400">Sharding by hash of the event ID spreads load. The TTL bounds memory on high-performance durable block storage / NVMe.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Effect transaction</td>
+                                        <td class="px-4 py-3 text-slate-400">Inserts the event ID under a unique constraint and applies the effect in one atomic transaction.</td>
+                                        <td class="px-4 py-3 text-slate-400">Closes the gap where a crash between processing and recording would allow a second execution.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Downstream sink</td>
+                                        <td class="px-4 py-3 text-slate-400">Consumes the processed events.</td>
+                                        <td class="px-4 py-3 text-slate-400">Sees the effect of each event once.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Retry queue</td>
+                                        <td class="px-4 py-3 text-slate-400">Redelivers events whose write timed out.</td>
+                                        <td class="px-4 py-3 text-slate-400">Exponential backoff with jitter prevents synchronized retries.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Dead letter queue</td>
+                                        <td class="px-4 py-3 text-slate-400">Holds events that exhausted their retries.</td>
+                                        <td class="px-4 py-3 text-slate-400">Preserves events for inspection and replay instead of silently dropping them.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. PROCESSING FLOW -->
+                <section id="processing" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">04</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. Processing flow</h2>
+                            <p class="text-xs text-slate-400">Step-by-step lifecycle of an event through the pipeline</p>
+                        </div>
+                    </div>
+                    <div class="space-y-3 text-slate-300 text-sm leading-relaxed">
+                        <ol class="list-decimal pl-5 space-y-2 text-xs">
+                            <li>A producer assigns a stable event ID and sends the event through the API gateway.</li>
+                            <li>The gateway authenticates and rate-limits, then appends the event to the partitioned stream, keyed so that all copies of an event land on the same partition.</li>
+                            <li>A de-dup worker reads the event and checks the local ID cache, then the sharded ID store.</li>
+                            <li>If the ID has been seen, the worker drops the event. This is the duplicate-blocked path.</li>
+                            <li>If the ID is new, the worker forwards it to the effect tier.</li>
+                            <li>The effect tier inserts the ID under a unique constraint and applies the effect in a single atomic transaction. Either both happen or neither does.</li>
+                            <li>If the write times out, the event goes to the retry queue with backoff and re-enters the dedup tier. After the maximum attempts it moves to the dead letter queue.</li>
+                        </ol>
+                    </div>
+                </section>
+
+                <!-- 5. FAILURE MODES AND MITIGATIONS -->
+                <section id="failures" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">05</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. Failure modes and mitigations</h2>
+                            <p class="text-xs text-slate-400">Handling broker duplicates, retries, crashes, contention, and retry storms</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <div class="overflow-x-auto rounded-xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Failure</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Mitigation</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Notes</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Duplicate delivery by the broker or network</td>
+                                        <td class="px-4 py-3 text-slate-400">The ID lookup finds the event already seen and drops the copy.</td>
+                                        <td class="px-4 py-3 text-slate-400">Handled in the local cache or the ID store.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Producer retries after a lost acknowledgement</td>
+                                        <td class="px-4 py-3 text-slate-400">The retry carries the same event ID, so it is treated as a duplicate.</td>
+                                        <td class="px-4 py-3 text-slate-400">Requires producer-assigned IDs that are stable across retries.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Crash between processing and recording the ID</td>
+                                        <td class="px-4 py-3 text-slate-400">Record the ID and apply the effect in one atomic transaction.</td>
+                                        <td class="px-4 py-3 text-slate-400">With check-then-record as separate steps, the retry applies the effect twice.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Lock contention on the processed-events store</td>
+                                        <td class="px-4 py-3 text-slate-400">Monitor lock wait, shard hot keys, and apply backpressure upstream.</td>
+                                        <td class="px-4 py-3 text-slate-400">Slow writes time out and trigger retries, which add more load.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Retry storm</td>
+                                        <td class="px-4 py-3 text-slate-400">Backoff with jitter, a retry budget, and a maximum attempt count before the dead letter queue.</td>
+                                        <td class="px-4 py-3 text-slate-400">Immediate unbounded retries consume the worker capacity that fresh events need.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Late duplicate after the TTL expires</td>
+                                        <td class="px-4 py-3 text-slate-400">Set the TTL longer than the longest retry window. Keep a unique constraint on the durable store as a backstop.</td>
+                                        <td class="px-4 py-3 text-slate-400">A duplicate that outlives the TTL looks like a new event.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Poison event that always fails</td>
+                                        <td class="px-4 py-3 text-slate-400">After the maximum attempts, move it to the dead letter queue for inspection and replay.</td>
+                                        <td class="px-4 py-3 text-slate-400">Stops one bad event from blocking the pipeline.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. INTERACTIVE SIMULATION -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/40">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    6. Interactive Simulation
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Live 100ms Ticking Sandbox</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Adjust load, duplicate rate, contention, and feature switches to test pipeline behavior</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="btnPresetHealthy" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                Healthy System
+                            </button>
+                            <button id="btnPresetStorm" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                Retry Storm
+                            </button>
+                            <button id="btnPresetNoIdempotency" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                Storm w/o Atomic
+                            </button>
+                            <button id="btnSimReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Sliders & Switches Controls -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs">
+                            <!-- Event load -->
+                            <div class="space-y-2">
+                                <div class="flex justify-between font-semibold">
+                                    <span class="text-slate-300">Event load</span>
+                                    <span id="valEventLoad" class="text-brand-indigo font-mono font-bold">50 events/s</span>
+                                </div>
+                                <input type="range" id="sliderEventLoad" min="10" max="300" step="5" value="50" class="w-full accent-brand-indigo cursor-pointer">
+                                <div class="flex justify-between text-[10px] text-slate-500 font-mono"><span>10</span><span>300</span></div>
+                            </div>
+
+                            <!-- Duplicate rate -->
+                            <div class="space-y-2">
+                                <div class="flex justify-between font-semibold">
+                                    <span class="text-slate-300">Duplicate rate</span>
+                                    <span id="valDupRate" class="text-brand-violet font-mono font-bold">20%</span>
+                                </div>
+                                <input type="range" id="sliderDupRate" min="0" max="60" step="1" value="20" class="w-full accent-brand-violet cursor-pointer">
+                                <div class="flex justify-between text-[10px] text-slate-500 font-mono"><span>0%</span><span>60%</span></div>
+                            </div>
+
+                            <!-- Store lock contention -->
+                            <div class="space-y-2">
+                                <div class="flex justify-between font-semibold">
+                                    <span class="text-slate-300">Store lock contention</span>
+                                    <span id="valContention" class="text-brand-amber font-mono font-bold">0%</span>
+                                </div>
+                                <input type="range" id="sliderContention" min="0" max="100" step="1" value="0" class="w-full accent-brand-amber cursor-pointer">
+                                <div class="flex justify-between text-[10px] text-slate-500 font-mono"><span>0%</span><span>100%</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Toggles & Action Buttons -->
+                        <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800 text-xs">
+                            <div class="flex flex-wrap items-center gap-6">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggleDedup" checked class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-brand-indigo accent-brand-indigo">
+                                    <span class="text-slate-200 font-semibold">De-duplication enabled</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" id="toggleAtomic" checked class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-brand-emerald accent-brand-emerald">
+                                    <span class="text-slate-200 font-semibold">Atomic idempotent writes</span>
+                                </label>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button id="btnPauseSim" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold transition border border-slate-700">
+                                    <i class="fa-solid fa-pause mr-1"></i> <span id="pauseBtnText">Pause</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Output State Grid -->
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs font-mono">
+                        <!-- Card 1: Ingestion & Dedup Tier -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-indigo flex items-center gap-1.5">
+                                    <i class="fa-solid fa-filter"></i> Dedup Tier
+                                </span>
+                                <span class="text-[10px] text-slate-400">Worker Pool</span>
+                            </div>
+                            <div class="space-y-1.5 text-[11px] text-slate-300">
+                                <div class="flex justify-between"><span>Incoming rate:</span> <span id="statIncoming" class="text-white font-bold">50 /s</span></div>
+                                <div class="flex justify-between"><span>Duplicates blocked:</span> <span id="statBlocked" class="text-brand-emerald font-bold">10 /s</span></div>
+                                <div class="flex justify-between"><span>Forwarded unique:</span> <span id="statForwarded" class="text-brand-indigo font-bold">50 /s</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Effect Tier & Store Capacity -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-emerald flex items-center gap-1.5">
+                                    <i class="fa-solid fa-database"></i> Effect Tier
+                                </span>
+                                <span class="text-[10px] text-slate-400">NVMe Store</span>
+                            </div>
+                            <div class="space-y-1.5 text-[11px] text-slate-300">
+                                <div class="flex justify-between"><span>Store capacity:</span> <span id="statStoreCap" class="text-white font-bold">120 /s</span></div>
+                                <div class="flex justify-between"><span>Applied once:</span> <span id="statAppliedOnce" class="text-brand-emerald font-bold">50 /s</span></div>
+                                <div class="flex justify-between"><span>Duplicates applied:</span> <span id="statDupApplied" class="text-brand-rose font-bold">0 /s</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Failure & Retry Path -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-amber flex items-center gap-1.5">
+                                    <i class="fa-solid fa-triangle-exclamation"></i> Failure Queues
+                                </span>
+                                <span class="text-[10px] text-slate-400">Retry / DLQ</span>
+                            </div>
+                            <div class="space-y-1.5 text-[11px] text-slate-300">
+                                <div class="flex justify-between"><span>Retries in flight:</span> <span id="statRetries" class="text-brand-amber font-bold">0</span></div>
+                                <div class="flex justify-between"><span>Write timeouts:</span> <span id="statTimeouts" class="text-slate-300">0 /s</span></div>
+                                <div class="flex justify-between"><span>Dead letter queue:</span> <span id="statDLQ" class="text-brand-rose font-bold">0</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Cumulative Totals -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-2 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-cyan flex items-center gap-1.5">
+                                    <i class="fa-solid fa-chart-pie"></i> Cumulative
+                                </span>
+                                <span class="text-[10px] text-slate-400">Totals</span>
+                            </div>
+                            <div class="space-y-1 text-[11px] text-slate-300">
+                                <div class="flex justify-between"><span>Total sent:</span> <span id="totSent">0</span></div>
+                                <div class="flex justify-between"><span>Applied once:</span> <span id="totAppliedOnce" class="text-brand-emerald font-bold">0</span></div>
+                                <div class="flex justify-between"><span>Dupes applied:</span> <span id="totDupApplied" class="text-brand-rose font-bold">0</span></div>
+                                <div class="flex justify-between"><span>Sent to DLQ:</span> <span id="totDLQ" class="text-brand-amber font-bold">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Verdict & Real-time Trace Log -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 flex flex-col justify-center">
+                            <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Plain-Language Verdict</span>
+                            <div id="simVerdict" class="text-xs text-brand-emerald font-bold leading-relaxed">
+                                System is healthy. Duplicates are blocked cleanly and every event is applied exactly once.
+                            </div>
+                        </div>
+                        <div class="md:col-span-2 p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="text-slate-400 font-bold flex items-center gap-2">
+                                    <i class="fa-solid fa-terminal text-brand-emerald"></i> Simulation Activity Log
+                                </span>
+                                <span class="text-[10px] text-slate-500">100ms Ticks</span>
+                            </div>
+                            <div id="simLog" class="min-h-[80px] max-h-[110px] overflow-y-auto space-y-1 text-slate-300 text-[11px]">
+                                <div class="text-slate-500 italic">Simulation initialized. Engine ticking at 100ms intervals...</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. DEPLOYMENT -->
+                <section id="deployment" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">07</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Deployment</h2>
+                            <p class="text-xs text-slate-400">Hosting as a single self-contained index.html file</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            The simulation is one self-contained <code class="text-brand-cyan">index.html</code> file. It uses no libraries, no network requests, and no external fonts, so it can be served by any static host. The options considered were GitHub Pages, Cloudflare Pages, Netlify, Vercel and Render. GitHub Pages was chosen for the walkthrough: create a public repository, upload <code class="text-brand-cyan">index.html</code> at the root, and enable Pages from the main branch. Once published, the page runs on the host and does not depend on the author's computer.
+                        </p>
+                        <p>
+                            For GitHub Pages, the documented limits are a published site of 1 GB or less and a soft bandwidth limit of 100 GB per month. Limits can change, so they should be checked before relying on a host.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 8. FUTURE WORK -->
+                <section id="future" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">08</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Future work</h2>
+                            <p class="text-xs text-slate-400">Roadmap for extended simulation and production engine features</p>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">Track individual event IDs so the learner can follow one event through the pipeline.</div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">Model TTL expiry and show a late duplicate slipping past the ID store.</div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">Add backoff with jitter as a control and compare it with immediate retries.</div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800">Add dead letter queue replay and a configurable retry budget.</div>
+                    </div>
+                </section>
+
+                <!-- 9. CONCLUSION -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">09</div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Conclusion</h2>
+                            <p class="text-xs text-slate-400">Final engineering summary</p>
+                        </div>
+                    </div>
+                    <div class="space-y-4 text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            Exactly-once effect comes from two pieces working together: a de-duplication tier that drops repeats cheaply, and an atomic, idempotent write that makes retries safe. The failure analysis and the simulation show the same point from two angles. De-duplication alone is not enough when the store is slow, because retries then become the main source of load and of duplicate effects.
+                        </p>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">D</div>
+                <span class="text-slate-300 font-semibold">Exactly-Once Event De-duplication Engine</span>
+            </div>
+            <div class="text-slate-400">
+                System Design Report • DesignSphere Dark Glassmorphism Aesthetic
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT: SIMULATOR & UI NAVIGATION -->
+    <script>
+        // Reading Progress & Scrollspy
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+        });
+
+        // Mobile TOC
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // Search Highlighting
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+        searchInput?.addEventListener('input', (e) => {
+            const val = e.target.value.trim();
+            if (val.length > 0) clearSearch.classList.remove('hidden');
+            else clearSearch.classList.add('hidden');
+        });
+        clearSearch?.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- SIMULATION ENGINE (100ms TICKING MODEL) ---
+        class DedupSimulationEngine {
+            constructor() {
+                this.eventLoadInput = document.getElementById('sliderEventLoad');
+                this.dupRateInput = document.getElementById('sliderDupRate');
+                this.contentionInput = document.getElementById('sliderContention');
+                this.toggleDedup = document.getElementById('toggleDedup');
+                this.toggleAtomic = document.getElementById('toggleAtomic');
+
+                // State metrics
+                this.retriesInFlight = 0;
+                this.dlqCount = 0;
+                this.totSent = 0;
+                this.totAppliedOnce = 0;
+                this.totDupApplied = 0;
+                this.totDLQ = 0;
+                this.isPaused = false;
+
+                this.logs = [];
+                this.initListeners();
+                this.startTicker();
+            }
+
+            initListeners() {
+                // Sliders text updates
+                this.eventLoadInput.addEventListener('input', () => {
+                    document.getElementById('valEventLoad').innerText = this.eventLoadInput.value + ' events/s';
+                });
+                this.dupRateInput.addEventListener('input', () => {
+                    document.getElementById('valDupRate').innerText = this.dupRateInput.value + '%';
+                });
+                this.contentionInput.addEventListener('input', () => {
+                    document.getElementById('valContention').innerText = this.contentionInput.value + '%';
+                });
+
+                // Presets
+                document.getElementById('btnPresetHealthy').addEventListener('click', () => {
+                    this.eventLoadInput.value = 50;
+                    this.dupRateInput.value = 20;
+                    this.contentionInput.value = 0;
+                    this.toggleDedup.checked = true;
+                    this.toggleAtomic.checked = true;
+                    this.updateLabels();
+                    this.logMsg('Loaded preset: Healthy system (50 events/s, 20% duplicates, no contention).', 'success');
+                });
+
+                document.getElementById('btnPresetStorm').addEventListener('click', () => {
+                    this.eventLoadInput.value = 100;
+                    this.dupRateInput.value = 20;
+                    this.contentionInput.value = 85;
+                    this.toggleDedup.checked = true;
+                    this.toggleAtomic.checked = true;
+                    this.updateLabels();
+                    this.logMsg('Loaded preset: Retry storm (100 events/s, 20% duplicates, 85% contention).', 'error');
+                });
+
+                document.getElementById('btnPresetNoIdempotency').addEventListener('click', () => {
+                    this.eventLoadInput.value = 100;
+                    this.dupRateInput.value = 20;
+                    this.contentionInput.value = 85;
+                    this.toggleDedup.checked = true;
+                    this.toggleAtomic.checked = false;
+                    this.updateLabels();
+                    this.logMsg('Loaded preset: Storm without idempotent writes (Atomic write disabled).', 'error');
+                });
+
+                document.getElementById('btnSimReset').addEventListener('click', () => {
+                    this.retriesInFlight = 0;
+                    this.dlqCount = 0;
+                    this.totSent = 0;
+                    this.totAppliedOnce = 0;
+                    this.totDupApplied = 0;
+                    this.totDLQ = 0;
+                    this.logs = [];
+                    this.logMsg('Simulation reset.', 'info');
+                    this.render(0,0,0,0,0,0,0,0);
+                });
+
+                const pauseBtn = document.getElementById('btnPauseSim');
+                pauseBtn.addEventListener('click', () => {
+                    this.isPaused = !this.isPaused;
+                    document.getElementById('pauseBtnText').innerText = this.isPaused ? 'Resume' : 'Pause';
+                });
+            }
+
+            updateLabels() {
+                document.getElementById('valEventLoad').innerText = this.eventLoadInput.value + ' events/s';
+                document.getElementById('valDupRate').innerText = this.dupRateInput.value + '%';
+                document.getElementById('valContention').innerText = this.contentionInput.value + '%';
+            }
+
+            logMsg(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let color = 'text-slate-300';
+                if (type === 'success') color = 'text-brand-emerald font-semibold';
+                if (type === 'warn') color = 'text-brand-amber';
+                if (type === 'error') color = 'text-brand-rose font-bold';
+
+                this.logs.unshift(`<div class="${color}">[${time}] ${msg}</div>`);
+                if (this.logs.length > 20) this.logs.pop();
+            }
+
+            startTicker() {
+                // Ticks every 100ms
+                setInterval(() => {
+                    if (this.isPaused) return;
+
+                    const uniqueEventsPerSec = parseInt(this.eventLoadInput.value);
+                    const dupRatePct = parseInt(this.dupRateInput.value) / 100;
+                    const contentionPct = parseInt(this.contentionInput.value) / 100;
+                    const dedupEnabled = this.toggleDedup.checked;
+                    const atomicEnabled = this.toggleAtomic.checked;
+
+                    // Scale down per 100ms tick
+                    const tickScale = 0.1;
+                    const newEventsTick = uniqueEventsPerSec * tickScale;
+                    const duplicatesTick = newEventsTick * dupRatePct;
+                    const totalIncomingTick = newEventsTick + duplicatesTick;
+
+                    // Worker capacity formula: 160 / (1 + retries in flight / 100)
+                    const workerCapacity = 160 / (1 + (this.retriesInFlight / 100));
+
+                    // Store throughput formula: 120 / (1 + 9 * contention)
+                    const storeThroughput = 120 / (1 + (9 * contentionPct));
+
+                    // Effective store capacity per tick
+                    const storeCapTick = storeThroughput * tickScale;
+
+                    // Retry re-entry: 30% of retry pool per tick
+                    const retriedTick = this.retriesInFlight * 0.3;
+                    this.retriesInFlight -= retriedTick;
+
+                    const totalWorkToStore = (dedupEnabled ? newEventsTick : totalIncomingTick) + retriedTick;
+
+                    let appliedOnceTick = 0;
+                    let dupAppliedTick = 0;
+                    let timeoutTick = 0;
+                    let blockedTick = 0;
+
+                    if (dedupEnabled) {
+                        blockedTick = duplicatesTick;
+                    }
+
+                    if (totalWorkToStore <= storeCapTick) {
+                        // All processed successfully
+                        appliedOnceTick = newEventsTick;
+                        if (!atomicEnabled && retriedTick > 0) {
+                            dupAppliedTick = retriedTick * 0.5; // half of retries double-applied
+                        }
+                    } else {
+                        // Store is overloaded! Writes time out
+                        appliedOnceTick = storeCapTick * (newEventsTick / totalWorkToStore);
+                        const excess = totalWorkToStore - storeCapTick;
+                        timeoutTick = excess;
+                        this.retriesInFlight += excess * 0.7; // 70% go to retry queue
+                        const dlqAdded = excess * 0.3; // 30% to DLQ
+                        this.dlqCount += dlqAdded;
+                        this.totDLQ += dlqAdded;
+                    }
+
+                    this.totSent += totalIncomingTick;
+                    this.totAppliedOnce += appliedOnceTick;
+                    this.totDupApplied += dupAppliedTick;
+
+                    // Update cumulative
+                    this.render(
+                        totalIncomingTick * 10,
+                        blockedTick * 10,
+                        newEventsTick * 10,
+                        storeThroughput,
+                        appliedOnceTick * 10,
+                        dupAppliedTick * 10,
+                        timeoutTick * 10,
+                        Math.round(this.retriesInFlight)
+                    );
+
+                }, 100);
+            }
+
+            render(incoming, blocked, forwarded, storeCap, appliedOnce, dupApplied, timeouts, retries) {
+                document.getElementById('statIncoming').innerText = Math.round(incoming) + ' /s';
+                document.getElementById('statBlocked').innerText = Math.round(blocked) + ' /s';
+                document.getElementById('statForwarded').innerText = Math.round(forwarded) + ' /s';
+                document.getElementById('statStoreCap').innerText = Math.round(storeCap) + ' /s';
+                document.getElementById('statAppliedOnce').innerText = Math.round(appliedOnce) + ' /s';
+                document.getElementById('statDupApplied').innerText = Math.round(dupApplied) + ' /s';
+                document.getElementById('statTimeouts').innerText = Math.round(timeouts) + ' /s';
+                document.getElementById('statRetries').innerText = retries;
+                document.getElementById('statDLQ').innerText = Math.round(this.dlqCount);
+
+                document.getElementById('totSent').innerText = Math.round(this.totSent * 10);
+                document.getElementById('totAppliedOnce').innerText = Math.round(this.totAppliedOnce * 10);
+                document.getElementById('totDupApplied').innerText = Math.round(this.totDupApplied * 10);
+                document.getElementById('totDLQ').innerText = Math.round(this.totDLQ * 10);
+
+                // Verdict update
+                const verdictEl = document.getElementById('simVerdict');
+                const contentionVal = parseInt(this.contentionInput.value);
+                const atomicVal = this.toggleAtomic.checked;
+
+                if (contentionVal > 70 && atomicVal) {
+                    verdictEl.innerText = "Retry storm active! Store contention causes write timeouts, accumulating retries and filling the dead letter queue.";
+                    verdictEl.className = "text-xs text-brand-amber font-bold leading-relaxed";
+                } else if (contentionVal > 70 && !atomicVal) {
+                    verdictEl.innerText = "Storm without atomic writes! Retried writes execute multiple times, causing severe duplicate effects downstream.";
+                    verdictEl.className = "text-xs text-brand-rose font-bold leading-relaxed";
+                } else {
+                    verdictEl.innerText = "System is healthy. Duplicates are blocked cleanly and every event is applied exactly once.";
+                    verdictEl.className = "text-xs text-brand-emerald font-bold leading-relaxed";
+                }
+
+                document.getElementById('simLog').innerHTML = this.logs.join('');
+            }
+        }
+
+        const simEngine = new DedupSimulationEngine();
+    </script>
+</body>
+</html>

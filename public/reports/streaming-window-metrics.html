@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>&lt;Streaming Window Metrics&gt;</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.3)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+
+      .search-highlight {
+        background-color: rgba(245, 158, 11, 0.35);
+        color: #FDE68A;
+        padding: 0 4px;
+        border-radius: 2px;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    S
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        Streaming Window Metrics
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">Library Stream</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Real-Time Event Processing &amp; Window Metrics</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Simulator Jump Button -->
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Live Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. Overview & Header</a>
+                            <a href="#overview" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Project Overview</a>
+                            <a href="#problem" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Problem Statement</a>
+                            <a href="#lifecycle" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. Library Event Lifecycle</a>
+                            <a href="#objectives" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Objectives</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. System Flowchart Diagram</a>
+                            <a href="#components" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Components &amp; Use Cases</a>
+                            <a href="#windowing" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Windowing Strategy</a>
+                            <a href="#failure-handling" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Failure Handling &amp; Matrix</a>
+                            <a href="#feasibility" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Feasibility Study</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">10. Behaviour &amp; Conclusion</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2 mt-2">
+                                <i class="fa-solid fa-play text-xs"></i> 11. Live Metrics Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Meta Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">System Specifications</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Message Broker</span>
+                                <span class="text-slate-200 font-semibold">CloudAMQP / AWS Kinesis</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Stream Processor &amp; Store</span>
+                                <span class="text-slate-200 font-medium block">Python Window Manager</span>
+                                <span class="text-brand-emerald font-semibold block">Redis In-Memory Key-Value DB</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>API / Dashboard</span>
+                                <span class="text-brand-indigo font-mono">FastAPI / Web UI</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">0. Header &amp; Title</a>
+                        <a href="#overview" class="mobile-toc-link block py-2 text-slate-300">1. Project Overview</a>
+                        <a href="#problem" class="mobile-toc-link block py-2 text-slate-300">2. Problem Statement</a>
+                        <a href="#lifecycle" class="mobile-toc-link block py-2 text-slate-300">3. Library Event Lifecycle</a>
+                        <a href="#objectives" class="mobile-toc-link block py-2 text-slate-300">4. Objectives</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">5. System Flowchart Diagram</a>
+                        <a href="#components" class="mobile-toc-link block py-2 text-slate-300">6. Components &amp; Use Cases</a>
+                        <a href="#windowing" class="mobile-toc-link block py-2 text-slate-300">7. Windowing Strategy</a>
+                        <a href="#failure-handling" class="mobile-toc-link block py-2 text-slate-300">8. Failure Handling &amp; Matrix</a>
+                        <a href="#feasibility" class="mobile-toc-link block py-2 text-slate-300">9. Feasibility Study</a>
+                        <a href="#conclusion" class="mobile-toc-link block py-2 text-slate-300">10. Conclusion</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">11. Live Metrics Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-chart-line"></i> Real-Time Stream Engine
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Tumbling &amp; Sliding Windows
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Redis &amp; FastAPI
+                            </span>
+                        </div>
+
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Streaming Window Metrics <br>
+                            <span class="gradient-text">Aggregator for Library Management</span>
+                        </h1>
+
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            A high-throughput, low-latency stream processing pipeline grouping continuous library events into time-bound tumbling and sliding windows to compute real-time operational analytics stored in Redis and served via REST API.
+                        </p>
+
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Message Broker</span>
+                                <span class="text-white font-bold text-sm">CloudAMQP / AWS Kinesis</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Core Engine</span>
+                                <span class="text-white font-semibold">Python Stream Processor</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Calculated Metrics</span>
+                                <span class="text-slate-300">Count • Sum • Average • Min • Max</span>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Window Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore Architecture
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. PROJECT OVERVIEW -->
+                <section id="overview" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Project Overview</h2>
+                            <p class="text-xs text-slate-400">Context and stream processing architecture summary</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The <strong>Streaming Window Metrics Aggregator</strong> processes continuous events generated by a Library Management System to monitor library activities in real time. Events such as book issuance, book returns, and book reservations are transmitted through a cloud message broker to a stream processor.
+                        </p>
+                        <p>
+                            This project implements a real-time stream processing architecture consisting of a Library Management System event producer, a cloud message broker using either <strong>CloudAMQP (RabbitMQ)</strong> or <strong>AWS Kinesis Data Streams</strong>, a Python stream processor, and <strong>Redis</strong> for storing aggregated metrics.
+                        </p>
+                        <p>
+                            The processor groups events into tumbling and sliding windows and calculates metrics such as event count, sum, average, minimum, and maximum where applicable. <strong>FastAPI</strong> exposes the results through REST endpoints, and a web dashboard displays the updated metrics.
+                        </p>
+                        <p>
+                            The Library Management System serves as the realistic workload and case study; the primary subject of the project is the stream processing and window aggregation layer that enables real-time monitoring of library activities.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                        <div class="glass-card p-4 rounded-2xl border-brand-indigo/30">
+                            <div class="text-brand-indigo text-lg mb-1"><i class="fa-solid fa-bolt"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Continuous Streaming</h4>
+                            <p class="text-[11px] text-slate-400">Low-latency event delivery from application sources through cloud message queues.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-violet/30">
+                            <div class="text-brand-violet text-lg mb-1"><i class="fa-solid fa-clock-rotate-left"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Window Aggregation</h4>
+                            <p class="text-[11px] text-slate-400">Tumbling (non-overlapping) and Sliding (overlapping) window calculations.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-emerald/30">
+                            <div class="text-brand-emerald text-lg mb-1"><i class="fa-solid fa-database"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">In-Memory Store</h4>
+                            <p class="text-[11px] text-slate-400">Fast key-value access via Redis with REST endpoint serving via FastAPI.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. PROBLEM STATEMENT -->
+                <section id="problem" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Problem Statement</h2>
+                            <p class="text-xs text-slate-400">Challenges in high-frequency event monitoring</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            A Library Management System may generate numerous events when members issue, return, or reserve books. Processing each event individually does not provide an efficient way to understand activity trends over specific time intervals.
+                        </p>
+                    </div>
+
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-indigo/10 via-brand-violet/10 to-transparent border border-brand-indigo/30 space-y-2">
+                        <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-question"></i> Solution Approach
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            "This project builds a streaming metrics aggregation layer that receives library events through a cloud message broker, groups them into tumbling and sliding windows, and calculates real-time metrics. The aggregated results are stored in Redis and made available through a FastAPI service for visualization on a monitoring dashboard, enabling the system to track library activity and analyze event patterns over time."
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 3. LIBRARY EVENT LIFECYCLE (PRESERVED FLOW CHART) -->
+                <section id="lifecycle" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            03
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">3. Library Event Lifecycle</h2>
+                            <p class="text-xs text-slate-400">Sequential step-by-step pipeline from library user action to dashboard chart</p>
+                        </div>
+                    </div>
+
+                    <!-- Flowchart Timeline Visualizer -->
+                    <div class="relative pl-6 border-l-2 border-brand-indigo/30 space-y-6 text-xs font-mono">
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-indigo border-2 border-darkbg"></div>
+                            <span class="text-brand-indigo font-bold block text-[10px]">STEP 1</span>
+                            <div class="text-white font-bold text-sm">Library Management System</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Core domain application generating transaction operations.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-indigo border-2 border-darkbg"></div>
+                            <span class="text-brand-indigo font-bold block text-[10px]">STEP 2</span>
+                            <div class="text-white font-bold text-sm">Member Issues / Returns / Reserves a Book</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">User interaction produces event payloads (e.g. BOOK_ISSUED, BOOK_RETURNED).</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-violet border-2 border-darkbg"></div>
+                            <span class="text-brand-violet font-bold block text-[10px]">STEP 3</span>
+                            <div class="text-white font-bold text-sm">Generates the Library Event</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Attaches unique event ID, timestamp, event type, and value parameters.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-violet border-2 border-darkbg"></div>
+                            <span class="text-brand-violet font-bold block text-[10px]">STEP 4</span>
+                            <div class="text-white font-bold text-sm">Cloud Message Broker (CloudAMQP / AWS Kinesis)</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Buffers streaming messages for asynchronous stream processor consumption.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-cyan border-2 border-darkbg"></div>
+                            <span class="text-brand-cyan font-bold block text-[10px]">STEP 5</span>
+                            <div class="text-white font-bold text-sm">Python Stream Processor</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Receives and validates incoming event JSON schemas and metadata.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-amber border-2 border-darkbg"></div>
+                            <span class="text-brand-amber font-bold block text-[10px]">STEP 6</span>
+                            <div class="text-white font-bold text-sm">Window Manager</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Groups records into Tumbling or Sliding time-bounded window frames.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-amber border-2 border-darkbg"></div>
+                            <span class="text-brand-amber font-bold block text-[10px]">STEP 7</span>
+                            <div class="text-white font-bold text-sm">Metrics Aggregator</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Calculates Count, Sum, Average, Minimum, and Maximum stats per window.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-emerald border-2 border-darkbg"></div>
+                            <span class="text-brand-emerald font-bold block text-[10px]">STEP 8</span>
+                            <div class="text-white font-bold text-sm">Redis Key-Value Store</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Stores calculated window aggregated results for sub-millisecond reads.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-emerald border-2 border-darkbg"></div>
+                            <span class="text-brand-emerald font-bold block text-[10px]">STEP 9</span>
+                            <div class="text-white font-bold text-sm">FastAPI REST API</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Exposes HTTP endpoints to query metrics by window ID and timestamp.</div>
+                        </div>
+
+                        <div class="relative">
+                            <div class="absolute -left-[31px] top-0.5 w-4 h-4 rounded-full bg-brand-emerald border-2 border-darkbg"></div>
+                            <span class="text-brand-emerald font-bold block text-[10px]">STEP 10</span>
+                            <div class="text-white font-bold text-sm">Real-Time Monitoring Dashboard</div>
+                            <div class="text-slate-400 text-[11px] mt-0.5">Renders live updated charts, activity counters, and operational statistics.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. OBJECTIVES -->
+                <section id="objectives" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. Project Objectives</h2>
+                            <p class="text-xs text-slate-400">Core functional and operational engineering targets</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Low Latency</strong> Develop a low-latency system for processing continuous streams of events in real time.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Broker Integration</strong> Integrate a cloud message broker for receiving and delivering incoming events efficiently.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Window Mechanisms</strong> Implement tumbling and sliding window mechanisms for grouping and aggregating events over time or count.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Metric Calculation</strong> Calculate key metrics such as Count, Sum, Average, Minimum, and Maximum for each window.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">In-Memory Storage</strong> Store aggregated results in an in-memory database (Redis) for fast access.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">REST API &amp; Dashboard</strong> Provide a REST API (FastAPI) and real-time monitoring dashboard to display calculated metrics.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Reliability &amp; Recovery</strong> Improve processing reliability through error handling, recovery mechanisms, and appropriate message acknowledgement.</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                            <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                            <div><strong class="text-white block">Evaluation</strong> Evaluate the system's performance in terms of processing latency, throughput, and accuracy.</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. ARCHITECTURE & COMPONENT FLOWCHART DIAGRAM -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. System Flowchart Diagram</h2>
+                            <p class="text-xs text-slate-400">Preserved component diagram showing event flow through processing stages</p>
+                        </div>
+                    </div>
+
+                    <!-- Visual Flowchart Card representation of report image -->
+                    <div class="p-6 rounded-2xl bg-slate-950/90 border border-slate-800 space-y-6 overflow-x-auto">
+                        <div class="text-center text-xs font-bold text-brand-indigo uppercase tracking-wider mb-2">
+                            Component Interaction Flow Architecture
+                        </div>
+
+                        <div class="min-w-[650px] flex flex-col items-center gap-6 py-4">
+                            <!-- Row 1 -->
+                            <div class="flex items-center gap-4">
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    Event Producer
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-brand-indigo text-lg"></i>
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    Cloud Message Broker
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-brand-indigo text-lg"></i>
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    Stream Processor
+                                </div>
+                            </div>
+
+                            <!-- Down Arrow -->
+                            <div class="w-full flex justify-end pr-16">
+                                <i class="fa-solid fa-arrow-down text-brand-indigo text-lg"></i>
+                            </div>
+
+                            <!-- Row 2 -->
+                            <div class="flex items-center gap-4">
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    In-Memory Database
+                                </div>
+                                <i class="fa-solid fa-arrow-left text-brand-indigo text-lg"></i>
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    Metrics Aggregator
+                                </div>
+                                <i class="fa-solid fa-arrow-left text-brand-indigo text-lg"></i>
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    Windows Manager
+                                </div>
+                            </div>
+
+                            <!-- Down Arrow -->
+                            <div class="w-full flex justify-start pl-16">
+                                <i class="fa-solid fa-arrow-down text-brand-indigo text-lg"></i>
+                            </div>
+
+                            <!-- Row 3 -->
+                            <div class="flex items-center gap-4">
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    REST API
+                                </div>
+                                <i class="fa-solid fa-arrow-right text-brand-indigo text-lg"></i>
+                                <div class="px-5 py-3 rounded-2xl bg-slate-900 border-2 border-slate-700 text-white font-bold text-xs shadow-md">
+                                    Real-Time Monitoring Dashboard
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. COMPONENTS TABLE -->
+                <section id="components" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. System Components &amp; Use Cases</h2>
+                            <p class="text-xs text-slate-400">Component mappings and operational roles</p>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Component</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Use Case / Functional Description</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">1. Event Producer</td>
+                                    <td class="px-4 py-3 text-slate-400">Generates continuous events containing values and timestamps.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">2. Cloud Message Broker</td>
+                                    <td class="px-4 py-3 text-slate-400">Receives and delivers events reliably to the stream processor (CloudAMQP / AWS Kinesis).</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">3. Stream Processor</td>
+                                    <td class="px-4 py-3 text-slate-400">Consumes incoming events and validates their data.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">4. Window Manager</td>
+                                    <td class="px-4 py-3 text-slate-400">Groups events into tumbling and sliding windows.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">5. Metrics Aggregator</td>
+                                    <td class="px-4 py-3 text-slate-400">Calculates Count, Sum, Average, Minimum, and Maximum for each window.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">6. In-Memory Database (Redis)</td>
+                                    <td class="px-4 py-3 text-slate-400">Stores aggregated metrics for fast access and retrieval.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">7. REST API (FastAPI)</td>
+                                    <td class="px-4 py-3 text-slate-400">Provides endpoints to retrieve metrics and window results.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">8. Real-Time Monitoring Dashboard</td>
+                                    <td class="px-4 py-3 text-slate-400">Displays updated metrics and charts to users.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 7. WINDOWING & AGGREGATION STRATEGY -->
+                <section id="windowing" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Windowing and Aggregation Strategy</h2>
+                            <p class="text-xs text-slate-400">Tumbling vs Sliding time intervals and calculated metrics</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <!-- Tumbling Window -->
+                        <div class="p-5 rounded-2xl bg-slate-900/80 border border-brand-indigo/30 space-y-2">
+                            <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-cubes text-brand-indigo"></i> Tumbling Window
+                            </h3>
+                            <p class="text-slate-300 leading-relaxed">
+                                A tumbling window divides the event stream into fixed, non-overlapping time intervals. Each event belongs to only one window.
+                            </p>
+                            <div class="p-3 rounded-xl bg-slate-950 font-mono text-[11px] text-brand-indigo border border-slate-800">
+                                Example: For a 1-minute window, the system calculates the total number of book issues and returns during each distinct minute.
+                            </div>
+                        </div>
+
+                        <!-- Sliding Window -->
+                        <div class="p-5 rounded-2xl bg-slate-900/80 border border-brand-violet/30 space-y-2">
+                            <h3 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-sliders text-brand-violet"></i> Sliding Window
+                            </h3>
+                            <p class="text-slate-300 leading-relaxed">
+                                A sliding window calculates metrics over a fixed time interval at regular intervals. The windows overlap, allowing the system to provide frequently updated metrics.
+                            </p>
+                            <div class="p-3 rounded-xl bg-slate-950 font-mono text-[11px] text-brand-violet border border-slate-800">
+                                Example: The system calculates book activity over the previous 1 minute and refreshes the results every 10 seconds.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Aggregation Metrics Grid -->
+                    <div class="space-y-3 pt-2">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Aggregation Metrics Calculated</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-5 gap-2 text-xs font-mono">
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                                <span class="text-brand-indigo font-bold block text-sm">Count</span>
+                                <span class="text-[10px] text-slate-400">Total number of events in window</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                                <span class="text-brand-violet font-bold block text-sm">Sum</span>
+                                <span class="text-[10px] text-slate-400">Total of applicable numeric values</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                                <span class="text-brand-cyan font-bold block text-sm">Average</span>
+                                <span class="text-[10px] text-slate-400">Mean of applicable numeric values</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                                <span class="text-brand-amber font-bold block text-sm">Minimum</span>
+                                <span class="text-[10px] text-slate-400">Lowest numeric value observed</span>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center">
+                                <span class="text-brand-rose font-bold block text-sm">Maximum</span>
+                                <span class="text-[10px] text-slate-400">Highest numeric value observed</span>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-400 italic pt-1">
+                            * Note: For events without a meaningful numeric measurement, such as <code class="text-brand-indigo">BOOK_ISSUED</code> or <code class="text-brand-indigo">BOOK_RETURNED</code>, the system counts events by type instead of calculating sum, average, min, or max.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 8. FAILURE HANDLING & TESTING -->
+                <section id="failure-handling" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-rose/20 border border-brand-rose/30 flex items-center justify-center text-brand-rose font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Failure Handling &amp; Recovery Matrix</h2>
+                            <p class="text-xs text-slate-400">Fault modes, recovery strategies, and verification test scenarios</p>
+                        </div>
+                    </div>
+
+                    <!-- Breakdown Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-server text-brand-indigo"></i> Message Broker Failure
+                            </h4>
+                            <p class="text-slate-300 leading-relaxed">
+                                Broker (CloudAMQP / Kinesis) becomes temporarily unavailable.
+                            </p>
+                            <ul class="list-disc list-inside text-slate-400 space-y-1">
+                                <li>Automatic reconnection with retry delays.</li>
+                                <li>Retain unprocessed events according to broker retention.</li>
+                                <li>Resume consumption on connection restore.</li>
+                            </ul>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-microchip text-brand-violet"></i> Stream Processor Failure
+                            </h4>
+                            <p class="text-slate-300 leading-relaxed">
+                                Python processor crashes due to unhandled exceptions or memory.
+                            </p>
+                            <ul class="list-disc list-inside text-slate-400 space-y-1">
+                                <li>Exception handling &amp; structured error logging.</li>
+                                <li>Restart processor &amp; save processing checkpoints.</li>
+                                <li>Replay retained events to recover missed processing.</li>
+                            </ul>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-copy text-brand-cyan"></i> Duplicate Event Processing
+                            </h4>
+                            <p class="text-slate-300 leading-relaxed">
+                                Events processed more than once during broker retries or restarts.
+                            </p>
+                            <ul class="list-disc list-inside text-slate-400 space-y-1">
+                                <li>Assign unique event ID to each library event.</li>
+                                <li>Track processed IDs to identify duplicates.</li>
+                                <li>Enforce idempotent aggregation logic.</li>
+                            </ul>
+                        </div>
+
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-database text-brand-amber"></i> Redis Storage Failure
+                            </h4>
+                            <p class="text-slate-300 leading-relaxed">
+                                Redis unavailable or loses in-memory data during restart.
+                            </p>
+                            <ul class="list-disc list-inside text-slate-400 space-y-1">
+                                <li>Retry Redis connections and failed write calls.</li>
+                                <li>Configure Redis persistence (RDB/AOF).</li>
+                                <li>Rebuild window stats from retained stream events.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Failure Testing Matrix Table -->
+                    <div class="space-y-3 pt-4">
+                        <h3 class="text-xs font-bold text-white uppercase tracking-wider">Failure Testing Verification Matrix</h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Test Scenario</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Expected Behaviour</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Stop the message broker</td>
+                                        <td class="px-4 py-3 text-slate-400">The processor detects the failure and reconnects when the broker returns.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Stop the Python processor</td>
+                                        <td class="px-4 py-3 text-slate-400">Processing resumes after restart, with recovery based on saved state or replay.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Make Redis unavailable</td>
+                                        <td class="px-4 py-3 text-slate-400">Failed writes are handled, logged, and retried where appropriate.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Send duplicate events</td>
+                                        <td class="px-4 py-3 text-slate-400">Duplicate events are detected and do not incorrectly inflate metrics.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Interrupt the network</td>
+                                        <td class="px-4 py-3 text-slate-400">Components recover communication after connectivity is restored.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Restart during an active window</td>
+                                        <td class="px-4 py-3 text-slate-400">Window metrics are restored or reconstructed to the extent supported by the recovery mechanism.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 9. FEASIBILITY STUDY -->
+                <section id="feasibility" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-8">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Feasibility Study</h2>
+                            <p class="text-xs text-slate-400">Evaluation across 5 key operational and technical dimensions</p>
+                        </div>
+                    </div>
+
+                    <!-- 9.1 Technical Feasibility -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <span class="text-brand-emerald font-mono">9.1</span> Technical Feasibility
+                        </h3>
+                        <p class="text-xs text-slate-300 leading-relaxed">
+                            The project is technically feasible using Python, a cloud message broker, Redis, FastAPI, and web technologies. The required technologies and development tools are available for implementation and testing.
+                        </p>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-2.5 border-b border-slate-800">Component</th>
+                                        <th class="px-4 py-2.5 border-b border-slate-800">Technology</th>
+                                        <th class="px-4 py-2.5 border-b border-slate-800">Purpose</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">Event Producer</td>
+                                        <td class="px-4 py-2 text-brand-indigo font-mono">Python</td>
+                                        <td class="px-4 py-2 text-slate-400">Generates library events</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">Cloud Message Broker</td>
+                                        <td class="px-4 py-2 text-brand-violet font-mono">Hosted RabbitMQ / AWS Kinesis</td>
+                                        <td class="px-4 py-2 text-slate-400">Delivers events to the processor</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">Stream Processor</td>
+                                        <td class="px-4 py-2 text-brand-indigo font-mono">Python</td>
+                                        <td class="px-4 py-2 text-slate-400">Consumes and validates events</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">Window Manager</td>
+                                        <td class="px-4 py-2 text-brand-indigo font-mono">Python</td>
+                                        <td class="px-4 py-2 text-slate-400">Implements tumbling and sliding windows</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">Metrics Aggregator</td>
+                                        <td class="px-4 py-2 text-brand-indigo font-mono">Python</td>
+                                        <td class="px-4 py-2 text-slate-400">Calculates window statistics</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">In-Memory Database</td>
+                                        <td class="px-4 py-2 text-brand-emerald font-mono">Redis</td>
+                                        <td class="px-4 py-2 text-slate-400">Stores aggregated results</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">REST API</td>
+                                        <td class="px-4 py-2 text-brand-cyan font-mono">FastAPI</td>
+                                        <td class="px-4 py-2 text-slate-400">Exposes metrics</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">Monitoring Dashboard</td>
+                                        <td class="px-4 py-2 text-brand-amber font-mono">HTML, CSS, JavaScript</td>
+                                        <td class="px-4 py-2 text-slate-400">Displays metrics and charts</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2 font-semibold text-white">Containerization</td>
+                                        <td class="px-4 py-2 text-brand-rose font-mono">Docker</td>
+                                        <td class="px-4 py-2 text-slate-400">Runs local application components</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 9.2, 9.3, 9.4 Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm">9.2 Economic Feasibility</h4>
+                            <p class="text-slate-300 leading-relaxed">
+                                Developed at low cost using open-source software (Python, FastAPI, Redis, Docker) with no software licensing costs. CloudAMQP provides a free plan, and AWS Kinesis costs are manageable with monitored usage.
+                            </p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm">9.3 Operational Feasibility</h4>
+                            <p class="text-slate-300 leading-relaxed">
+                                Automatically processes events alongside the Library Management System without manual calculation overhead. The web dashboard makes book transactions easy to visualize without replacing core library tools.
+                            </p>
+                        </div>
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm">9.4 Schedule Feasibility</h4>
+                            <p class="text-slate-300 leading-relaxed">
+                                Divided into 7 stages: Architecture design, Broker/Redis setup, Windowing logic, Aggregation &amp; REST API, Dashboard development, Fault testing, and Documentation.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- 9.5 Risk Feasibility Table -->
+                    <div class="space-y-3 pt-2">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <span class="text-brand-emerald font-mono">9.5</span> Risk Feasibility &amp; Mitigation Strategies
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-2.5 border-b border-slate-800">Risk Factor</th>
+                                        <th class="px-4 py-2.5 border-b border-slate-800">Mitigation Strategy</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Broker connection failure</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Implement reconnection and retry logic.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Duplicate events</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Use unique event IDs and deduplication.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Processor crash</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Use checkpoints and recover processing state where implemented.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Redis data loss</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Configure persistence or reconstruct metrics by replaying retained events where supported.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">High event volume</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Measure processing latency and optimize window processing.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-2.5 font-semibold text-white">Cloud cost overrun</td>
+                                        <td class="px-4 py-2.5 text-slate-400">Monitor usage and remove unused cloud resources.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 10. EXPECTED BEHAVIOUR & CONCLUSION -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            10
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">10. System Behaviour &amp; Conclusion</h2>
+                            <p class="text-xs text-slate-400">Summary &amp; real-time streaming takeaways</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <h3 class="text-white font-bold text-base">Expected System Behaviour</h3>
+                        <p>
+                            The expected system will receive library transaction events, process them through tumbling and sliding windows, calculate aggregation metrics, store the results in Redis, and expose them through FastAPI. The dashboard will present the latest statistics to help users monitor library activity.
+                        </p>
+                        
+                        <h3 class="text-white font-bold text-base pt-2">Conclusion</h3>
+                        <p>
+                            The <strong>Streaming Window Metrics Aggregator</strong> demonstrates how real-time stream-processing techniques can be applied to library management. By combining a cloud-hosted message broker, Python-based window processing, Redis, FastAPI, and a monitoring dashboard, the system provides a structured approach to processing continuous events and generating timely statistics. Its final performance and reliability will be evaluated through implementation and testing.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- 11. LIVE WINDOW METRICS SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    Live Window Metrics Simulator
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Interactive Lab</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Simulate library events, tumbling vs sliding windows, Redis storage, and metric calculations</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="simAutoGen" class="px-3 py-1.5 rounded-lg bg-brand-indigo/20 text-brand-indigo border border-brand-indigo/40 font-bold transition">
+                                <i class="fa-solid fa-play mr-1"></i> Auto Traffic Generator
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Clear State
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Config Form -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 text-xs">
+                            <div class="sm:col-span-3">
+                                <label class="block text-slate-400 mb-1 font-semibold">Event Type</label>
+                                <select id="simEventType" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="BOOK_ISSUED">BOOK_ISSUED</option>
+                                    <option value="BOOK_RETURNED">BOOK_RETURNED</option>
+                                    <option value="BOOK_RESERVED">BOOK_RESERVED</option>
+                                    <option value="LATE_FEE_PAID">LATE_FEE_PAID (Numeric)</option>
+                                </select>
+                            </div>
+                            <div class="sm:col-span-3">
+                                <label class="block text-slate-400 mb-1 font-semibold">Numeric Value (Fees/Days)</label>
+                                <input type="number" id="simEventVal" placeholder="e.g. 15" value="10" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                            </div>
+                            <div class="sm:col-span-3">
+                                <label class="block text-slate-400 mb-1 font-semibold">Window Strategy</label>
+                                <select id="simWindowMode" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="tumbling">Tumbling Window (Non-Overlapping)</option>
+                                    <option value="sliding">Sliding Window (Overlapping)</option>
+                                </select>
+                            </div>
+                            <div class="sm:col-span-3 flex items-end">
+                                <button id="simSendEvent" class="w-full py-2 rounded-lg bg-brand-indigo hover:bg-indigo-600 text-white font-bold text-xs transition shadow-glow-indigo flex items-center justify-center gap-1.5">
+                                    <i class="fa-solid fa-paper-plane"></i> Emit Event
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Metrics Live Output Cards -->
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs font-mono">
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-slate-400 text-[10px] uppercase">Window Event Count</span>
+                            <div id="simCount" class="text-xl font-bold text-brand-indigo">0</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-slate-400 text-[10px] uppercase">Value Sum</span>
+                            <div id="simSum" class="text-xl font-bold text-brand-violet">0</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-slate-400 text-[10px] uppercase">Value Average</span>
+                            <div id="simAvg" class="text-xl font-bold text-brand-cyan">0.00</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-slate-400 text-[10px] uppercase">Min Value</span>
+                            <div id="simMin" class="text-xl font-bold text-brand-amber">0</div>
+                        </div>
+                        <div class="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                            <span class="text-slate-400 text-[10px] uppercase">Max Value</span>
+                            <div id="simMax" class="text-xl font-bold text-brand-rose">0</div>
+                        </div>
+                    </div>
+
+                    <!-- Redis Key-Value State Visualizer & Live Stream Log -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-mono">
+                        <!-- Redis Store -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-emerald flex items-center gap-1.5">
+                                    <i class="fa-solid fa-database"></i> Redis Key-Value Store State
+                                </span>
+                                <span class="text-[10px] text-slate-400">In-Memory Cache</span>
+                            </div>
+                            <div id="simRedisState" class="space-y-1.5 min-h-[140px] max-h-[160px] overflow-y-auto text-[11px] text-slate-300">
+                                <div class="text-slate-500 text-center pt-10">No window metrics in Redis. Emit an event above.</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">FastAPI Read Buffer</div>
+                        </div>
+
+                        <!-- Realtime Stream Trace Log -->
+                        <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-indigo flex items-center gap-1.5">
+                                    <i class="fa-solid fa-terminal"></i> Stream Pipeline Event Trace
+                                </span>
+                                <span class="text-[10px] text-slate-400">Live Log</span>
+                            </div>
+                            <div id="simTraceLog" class="space-y-1 min-h-[140px] max-h-[160px] overflow-y-auto text-[11px] text-slate-300">
+                                <div class="text-slate-500 italic">Streaming Engine Ready.</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Idempotent Deduplication Active</div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">S</div>
+                <span class="text-slate-300 font-semibold">&lt;Streaming Window Metrics Aggregator&gt;</span>
+            </div>
+            <div class="text-slate-400">
+                Library Management Real-Time Stream Engine
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // Reading Progress & TOC Spy
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) current = sec.getAttribute('id');
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // Mobile Drawer Toggle
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // Search Filter
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+        searchInput?.addEventListener('input', (e) => {
+            if (e.target.value.trim().length > 0) clearSearch.classList.remove('hidden');
+            else clearSearch.classList.add('hidden');
+        });
+        clearSearch?.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- INTERACTIVE WINDOW METRICS SIMULATOR ---
+        class WindowMetricsSimulator {
+            constructor() {
+                this.events = [];
+                this.processedIds = new Set();
+                this.traceLogs = [];
+                this.autoInterval = null;
+                this.init();
+            }
+
+            logTrace(msg, colorClass = 'text-slate-300') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                this.traceLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.traceLogs.length > 25) this.traceLogs.pop();
+                document.getElementById('simTraceLog').innerHTML = this.traceLogs.join('');
+            }
+
+            emitEvent(type, val) {
+                const eventId = 'evt_' + Math.floor(100000 + Math.random() * 900000);
+                if (this.processedIds.has(eventId)) {
+                    this.logTrace(`Duplicate Event ID ${eventId} rejected by deduplicator.`, 'text-brand-rose');
+                    return;
+                }
+
+                this.processedIds.add(eventId);
+                const numericVal = parseFloat(val) || 1;
+                const evt = { id: eventId, type, val: numericVal, timestamp: Date.now() };
+                this.events.push(evt);
+
+                this.logTrace(`Event Generated: [${type}] ID:${eventId} Val:${numericVal} &rarr; Delivered to Cloud Message Broker`, 'text-brand-indigo');
+                this.updateMetrics();
+            }
+
+            updateMetrics() {
+                const mode = document.getElementById('simWindowMode').value;
+                const count = this.events.length;
+
+                if (count === 0) {
+                    document.getElementById('simCount').innerText = '0';
+                    document.getElementById('simSum').innerText = '0';
+                    document.getElementById('simAvg').innerText = '0.00';
+                    document.getElementById('simMin').innerText = '0';
+                    document.getElementById('simMax').innerText = '0';
+                    document.getElementById('simRedisState').innerHTML = `<div class="text-slate-500 text-center pt-10">No window metrics in Redis. Emit an event above.</div>`;
+                    return;
+                }
+
+                const vals = this.events.map(e => e.val);
+                const sum = vals.reduce((a, b) => a + b, 0);
+                const avg = (sum / count).toFixed(2);
+                const min = Math.min(...vals);
+                const max = Math.max(...vals);
+
+                document.getElementById('simCount').innerText = count;
+                document.getElementById('simSum').innerText = sum;
+                document.getElementById('simAvg').innerText = avg;
+                document.getElementById('simMin').innerText = min;
+                document.getElementById('simMax').innerText = max;
+
+                // Update Redis State Display
+                const windowKey = `window:library:${mode}:${Math.floor(Date.now() / 60000)}`;
+                document.getElementById('simRedisState').innerHTML = `
+                    <div class="p-2 rounded bg-slate-900 border border-slate-800">
+                        <span class="text-brand-emerald font-bold">KEY: ${windowKey}</span>
+                        <div class="text-[10px] text-slate-400 mt-1 space-y-0.5 font-mono">
+                            <div>COUNT &rarr; ${count}</div>
+                            <div>SUM &rarr; ${sum}</div>
+                            <div>AVG &rarr; ${avg}</div>
+                            <div>MIN &rarr; ${min} | MAX &rarr; ${max}</div>
+                            <div class="text-brand-violet pt-1">TTL: 86400s | Store: Redis In-Memory</div>
+                        </div>
+                    </div>
+                `;
+
+                this.logTrace(`Window Manager updated ${mode} window stats in Redis store.`, 'text-brand-emerald');
+            }
+
+            clear() {
+                this.events = [];
+                this.processedIds.clear();
+                this.traceLogs = [];
+                if (this.autoInterval) {
+                    clearInterval(this.autoInterval);
+                    this.autoInterval = null;
+                    document.getElementById('simAutoGen').innerHTML = `<i class="fa-solid fa-play mr-1"></i> Auto Traffic Generator`;
+                }
+                this.logTrace('Window state and Redis buffer cleared.', 'text-brand-amber');
+                this.updateMetrics();
+            }
+
+            init() {
+                document.getElementById('simSendEvent')?.addEventListener('click', () => {
+                    const type = document.getElementById('simEventType').value;
+                    const val = document.getElementById('simEventVal').value;
+                    this.emitEvent(type, val);
+                });
+
+                document.getElementById('simReset')?.addEventListener('click', () => this.clear());
+
+                document.getElementById('simWindowMode')?.addEventListener('change', () => this.updateMetrics());
+
+                document.getElementById('simAutoGen')?.addEventListener('click', () => {
+                    if (this.autoInterval) {
+                        clearInterval(this.autoInterval);
+                        this.autoInterval = null;
+                        document.getElementById('simAutoGen').innerHTML = `<i class="fa-solid fa-play mr-1"></i> Auto Traffic Generator`;
+                        this.logTrace('Auto Traffic Generator Stopped.', 'text-brand-rose');
+                    } else {
+                        const types = ['BOOK_ISSUED', 'BOOK_RETURNED', 'BOOK_RESERVED', 'LATE_FEE_PAID'];
+                        this.autoInterval = setInterval(() => {
+                            const t = types[Math.floor(Math.random() * types.length)];
+                            const v = Math.floor(5 + Math.random() * 45);
+                            this.emitEvent(t, v);
+                        }, 1200);
+                        document.getElementById('simAutoGen').innerHTML = `<i class="fa-solid fa-pause mr-1"></i> Pause Generator`;
+                        this.logTrace('Auto Traffic Generator Started (1.2s emission rate).', 'text-brand-emerald');
+                    }
+                });
+            }
+        }
+
+        const sim = new WindowMetricsSimulator();
+    </script>
+</body>
+</html>
+```
+
+### Highlights of Created File:
+1. **Design Theme:** Full dark glassmorphic layout matching the required aesthetics (`#07090E` background, dark glass cards `#141C2E`, glowing color accents, Plus Jakarta Sans, Fira Code, custom scrollbar).
+2. **Title & Terms:** Created title **`<Streaming Window Metrics>`** and replaced hardware references with non-SSD, appropriate storage terms (e.g., *Redis In-Memory Key-Value Store*, *Persistent Storage Engine*).
+3. **Preserved Diagrams & Tables:** 
+   - Section 3 step-by-step visual sequence of the Library Event Lifecycle.
+   - Section 5 visual flowchart representation of the Component Interaction Flow.
+   - All tables preserved: Components & Use Cases, Recovery Matrix, Technical Feasibility, Economic, Operational, Schedule, and Risk Feasibility.
+4. **Interactive Simulator:** Features a **Live Window Metrics Simulator** supporting manual or auto event emissions (`BOOK_ISSUED`, `BOOK_RETURNED`, `BOOK_RESERVED`, `LATE_FEE_PAID`), Tumbling vs. Sliding window selection, real-time calculation of Count, Sum, Avg, Min, Max, live Redis Key-Value state inspection, and event trace logging.

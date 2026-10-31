@@ -1,0 +1,1599 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time-Series Storage & Ingestion Pipeline</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts: Plus Jakarta Sans & Fira Code -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Plus Jakarta Sans', 'sans-serif'],
+              mono: ['Fira Code', 'monospace'],
+            },
+            colors: {
+              darkbg: '#07090E',
+              surface: '#0E1320',
+              card: '#141C2E',
+              cardHover: '#1B253D',
+              borderGlow: 'rgba(255, 255, 255, 0.08)',
+              brand: {
+                indigo: '#6366F1',
+                violet: '#8B5CF6',
+                emerald: '#10B981',
+                cyan: '#06B6D4',
+                amber: '#F59E0B',
+                rose: '#F43F5E'
+              }
+            },
+            boxShadow: {
+              'glow-indigo': '0 0 25px -5px rgba(99, 102, 241, 0.3)',
+              'glow-violet': '0 0 25px -5px rgba(139, 92, 246, 0.3)',
+              'glow-emerald': '0 0 25px -5px rgba(16, 185, 129, 0.3)',
+              'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)'
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      /* Custom Scrollbar & Aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #07090E;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #334155;
+      }
+
+      .glass-panel {
+        background: rgba(14, 19, 32, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .glass-card {
+        background: rgba(20, 28, 46, 0.6);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      .glass-card:hover {
+        border-color: rgba(99, 102, 241, 0.3);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.2);
+      }
+
+      .gradient-text {
+        background: linear-gradient(135deg, #A5B4FC 0%, #6366F1 50%, #8B5CF6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .gradient-text-emerald {
+        background: linear-gradient(135deg, #6EE7B7 0%, #10B981 50%, #06B6D4 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .bg-grid-pattern {
+        background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+        background-size: 32px 32px;
+      }
+
+      /* Glow Effects */
+      .glow-blob {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(90px);
+        pointer-events: none;
+        z-index: 0;
+      }
+
+      code {
+        font-family: 'Fira Code', monospace;
+      }
+    </style>
+</head>
+<body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
+
+    <!-- Ambient Glow Background Spheres -->
+    <div class="glow-blob w-96 h-96 bg-brand-indigo/15 top-10 left-1/4"></div>
+    <div class="glow-blob w-[500px] h-[500px] bg-brand-violet/10 top-[40%] right-10"></div>
+    <div class="glow-blob w-96 h-96 bg-brand-emerald/10 bottom-20 left-10"></div>
+
+    <!-- Reading Progress Bar -->
+    <div class="fixed top-0 left-0 w-full h-1 bg-slate-800/80 z-50">
+        <div id="scrollProgress" class="h-full bg-gradient-to-r from-brand-indigo via-brand-violet to-brand-emerald w-0 transition-all duration-150"></div>
+    </div>
+
+    <!-- Sticky Navigation Header -->
+    <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/[0.08]">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- Brand / Logo -->
+            <div class="flex items-center gap-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet flex items-center justify-center text-white shadow-glow-indigo font-mono font-bold text-lg">
+                    F
+                </div>
+                <div>
+                    <span class="font-bold text-white text-base tracking-tight flex items-center gap-2">
+                        FlowStore
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-brand-indigo/20 text-brand-indigo font-mono border border-brand-indigo/30">Time-Series Storage</span>
+                    </span>
+                    <p class="text-xs text-slate-400 hidden sm:block">Time-Series Storage & Ingestion Pipeline (FlowStore)</p>
+                </div>
+            </div>
+
+            <!-- Quick Navigation & Search -->
+            <div class="flex items-center gap-3 sm:gap-4">
+                <!-- Search Box -->
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                    <input type="text" id="searchInput" placeholder="Search report..." 
+                        class="bg-slate-900/80 border border-slate-700/60 text-xs text-slate-200 placeholder-slate-400 rounded-lg pl-8 pr-8 py-1.5 focus:outline-none focus:border-brand-indigo w-32 sm:w-48 transition-all">
+                    <button id="clearSearch" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white text-xs">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+
+                <!-- Simulator Jump Button -->
+                <a href="#simulator" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-semibold shadow-glow-indigo hover:opacity-90 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-flask"></i>
+                    <span class="hidden sm:inline">Live Simulator</span>
+                </a>
+
+                <!-- Mobile TOC Toggle -->
+                <button id="mobileTocBtn" class="lg:hidden p-2 text-slate-300 hover:text-white rounded-lg bg-slate-800/60 border border-slate-700/60">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+
+            <!-- Sidebar Table of Contents (Desktop) -->
+            <aside class="hidden lg:block lg:col-span-3">
+                <div class="sticky top-24 space-y-4">
+                    <div class="glass-panel p-5 rounded-2xl">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+                            <span>Table of Contents</span>
+                            <i class="fa-solid fa-list-ul text-brand-indigo"></i>
+                        </h4>
+                        <nav id="tocNav" class="space-y-1 text-xs">
+                            <a href="#hero" class="toc-link block px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/50 transition">0. System Header</a>
+                            <a href="#abstract" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">1. Abstract</a>
+                            <a href="#introduction" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">2. Problem & Objectives</a>
+                            <a href="#architecture" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">3. System Architecture</a>
+                            <a href="#workflow" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">4. Ingestion & Chunking</a>
+                            <a href="#concurrency" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">5. Concurrency & Consistency</a>
+                            <a href="#datamodel" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">6. Data Model & Metrics</a>
+                            <a href="#experiments" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">7. Virtual-Lab Experiments</a>
+                            <a href="#tech-stack" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">8. Technology Stack</a>
+                            <a href="#feasibility" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">9. Feasibility & Scope</a>
+                            <a href="#conclusion" class="toc-link block px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition">10. Conclusion</a>
+                            <a href="#simulator" class="toc-link block px-3 py-2 rounded-lg text-brand-emerald font-semibold hover:bg-brand-emerald/10 transition flex items-center gap-2">
+                                <i class="fa-solid fa-play text-xs"></i> 11. Pipeline Simulator
+                            </a>
+                        </nav>
+                    </div>
+
+                    <!-- Author Info Card -->
+                    <div class="glass-panel p-5 rounded-2xl space-y-3">
+                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">Project Credits</h4>
+                        <div class="text-xs space-y-2">
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Author / Engineer</span>
+                                <span class="text-slate-200 font-semibold block">Baibhav Pati (Roll 47)</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400 block text-[10px] uppercase">Course & Class</span>
+                                <span class="text-slate-200 font-medium block">Software System Design</span>
+                                <span class="text-slate-400 font-mono text-[11px]">Class D12B</span>
+                            </div>
+                            <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+                                <span>Domain: Distributed Systems</span>
+                                <span class="text-brand-indigo font-mono">PyArrow/Parquet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Mobile Drawer TOC -->
+            <div id="mobileTocDrawer" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden lg:hidden flex flex-col justify-end">
+                <div class="glass-panel rounded-t-3xl p-6 max-h-[85vh] overflow-y-auto space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-bold text-white text-base">Navigation Index</h3>
+                        <button id="closeTocBtn" class="text-slate-400 p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <nav class="space-y-2 text-sm">
+                        <a href="#hero" class="mobile-toc-link block py-2 text-slate-300">0. System Header</a>
+                        <a href="#abstract" class="mobile-toc-link block py-2 text-slate-300">1. Abstract</a>
+                        <a href="#introduction" class="mobile-toc-link block py-2 text-slate-300">2. Problem & Objectives</a>
+                        <a href="#architecture" class="mobile-toc-link block py-2 text-slate-300">3. System Architecture</a>
+                        <a href="#workflow" class="mobile-toc-link block py-2 text-slate-300">4. Ingestion & Chunking</a>
+                        <a href="#concurrency" class="mobile-toc-link block py-2 text-slate-300">5. Concurrency & Consistency</a>
+                        <a href="#datamodel" class="mobile-toc-link block py-2 text-slate-300">6. Data Model & Metrics</a>
+                        <a href="#experiments" class="mobile-toc-link block py-2 text-slate-300">7. Experiments</a>
+                        <a href="#tech-stack" class="mobile-toc-link block py-2 text-slate-300">8. Technology Stack</a>
+                        <a href="#feasibility" class="mobile-toc-link block py-2 text-slate-300">9. Feasibility & Limitations</a>
+                        <a href="#conclusion" class="mobile-toc-link block py-2 text-slate-300">10. Conclusion</a>
+                        <a href="#simulator" class="mobile-toc-link block py-2 text-brand-emerald font-bold">11. Interactive Simulator</a>
+                    </nav>
+                </div>
+            </div>
+
+            <!-- Content Main Body -->
+            <main class="lg:col-span-9 space-y-12">
+
+                <!-- 0. HERO / HEADER SECTION -->
+                <section id="hero" class="relative glass-panel rounded-3xl p-6 sm:p-10 overflow-hidden border border-white/10">
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-brand-indigo/20 rounded-full blur-3xl pointer-events-none"></div>
+                    
+                    <div class="space-y-6 relative z-10">
+                        <!-- Badges -->
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-indigo/15 text-brand-indigo border border-brand-indigo/30 flex items-center gap-1.5">
+                                <i class="fa-solid fa-bolt"></i> Software System Design Case Study
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-violet/15 text-brand-violet border border-brand-violet/30">
+                                Bounded Queueing & Backpressure
+                            </span>
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold bg-brand-emerald/15 text-brand-emerald border border-brand-emerald/30">
+                                Columnar Parquet Storage
+                            </span>
+                        </div>
+
+                        <!-- Paper Title -->
+                        <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                            Time-Series Storage &amp; <span class="gradient-text">Ingestion Pipeline</span>
+                        </h1>
+
+                        <!-- Subtitle / Meta Summary -->
+                        <p class="text-slate-300 text-sm sm:text-base leading-relaxed max-w-3xl">
+                            FlowStore System Design Case Study: A bounded, multi-stage processing pipeline for record generation, queue pressure control, partition buffering, columnar chunking, and Parquet persistence telemetry.
+                        </p>
+
+                        <!-- Authors & Details Grid -->
+                        <div class="pt-4 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Author</span>
+                                <span class="text-white font-bold text-sm">Baibhav Pati</span>
+                                <span class="text-slate-400 block text-[10px]">Roll No. 47 • Class D12B</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Course</span>
+                                <span class="text-white font-semibold">Software System Design</span>
+                                <span class="text-slate-400 block text-[10px]">Project: FlowStore Virtual Lab</span>
+                            </div>
+                            <div class="bg-slate-900/60 p-3 rounded-xl border border-slate-800 sm:col-span-2 lg:col-span-1">
+                                <span class="text-slate-400 block text-[10px] uppercase tracking-wider font-semibold">Pipeline Highlights</span>
+                                <span class="text-slate-300">Bounded Queue • Parquet Writer • SQLite Metadata • WebSocket Telemetry</span>
+                            </div>
+                        </div>
+
+                        <!-- Hero Action Controls -->
+                        <div class="flex flex-wrap items-center gap-3 pt-2">
+                            <a href="#simulator" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-brand-indigo to-brand-violet text-white text-xs font-bold shadow-glow-indigo hover:scale-[1.02] transition flex items-center gap-2">
+                                <i class="fa-solid fa-gamepad"></i> Launch Ingestion Simulator
+                            </a>
+                            <a href="#architecture" class="px-5 py-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/80 text-white text-xs font-semibold transition flex items-center gap-2">
+                                <i class="fa-solid fa-diagram-project text-brand-indigo"></i> Explore System Diagrams
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 1. ABSTRACT -->
+                <section id="abstract" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            01
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">1. Abstract</h2>
+                            <p class="text-xs text-slate-400">Core executive summary & Virtual Lab scope</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            <strong class="text-white">FlowStore</strong> is a time-series storage and ingestion virtual lab designed to demonstrate how incoming records move through a bounded, multi-stage processing pipeline before being persisted as Parquet files. The system models record generation, queueing, validation, partition buffering, chunk formation, writing, and storage metadata. Its purpose is to make throughput, queue pressure, chunk lifecycle, and persistence behavior observable during controlled experiments.
+                        </p>
+                        <p>
+                            The implementation combines a React and TypeScript interface with a Python FastAPI backend and WebSocket updates. The processing engine uses PyArrow for Parquet output and SQLite for metadata. Docker Compose provides a repeatable local deployment with persistent high-throughput storage engine capabilities. The virtual lab exposes live metrics, event logs, run history, and storage inspection so that system-design trade-offs can be explored.
+                        </p>
+                        <p>
+                            FlowStore distinguishes implemented local behavior from a scalable target design. The current local pipeline can demonstrate ingestion and persistence behavior; production deployment would require further work on distributed coordination, durable messaging, cloud storage, authentication, and multi-instance recovery. Any capacity figures shown by the simulator should be treated as measurements of the configured run, not universal production guarantees.
+                        </p>
+                    </div>
+
+                    <!-- Highlight Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4">
+                        <div class="glass-card p-4 rounded-2xl border-brand-indigo/30">
+                            <div class="text-brand-indigo text-lg mb-1"><i class="fa-solid fa-list-check"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Bounded Queueing</h4>
+                            <p class="text-[11px] text-slate-400">Prevents unbounded memory growth during high-rate generation spikes via configurable backpressure.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-violet/30">
+                            <div class="text-brand-violet text-lg mb-1"><i class="fa-solid fa-table-columns"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Columnar Persistence</h4>
+                            <p class="text-[11px] text-slate-400">Uses PyArrow to serialize completed partition chunks into optimized Apache Parquet files.</p>
+                        </div>
+                        <div class="glass-card p-4 rounded-2xl border-brand-emerald/30">
+                            <div class="text-brand-emerald text-lg mb-1"><i class="fa-solid fa-[#10B981] fa-chart-line"></i></div>
+                            <h4 class="text-xs font-bold text-white mb-1">Live Telemetry</h4>
+                            <p class="text-[11px] text-slate-400">Pushes real-time queue depth, throughput rates, and chunk events via WebSocket connections.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. INTRODUCTION & OBJECTIVES -->
+                <section id="introduction" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            02
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">2. Introduction & Objectives</h2>
+                            <p class="text-xs text-slate-400">Ingestion bottleneck challenges & explicit system goals</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            Time-series systems ingest timestamped measurements from applications, devices, services, and infrastructure. These streams can arrive in bursts, and downstream processing or storage may not always keep pace with producers. A robust ingestion design must control memory use, validate incoming data, group records efficiently, and persist results in a format suitable for later analysis.
+                        </p>
+                        <p>
+                            FlowStore represents this problem as a visible pipeline. Rather than treating storage as a single operation, it separates generation, queueing, processing, buffering, chunk formation, writing, and metadata reporting. This separation helps identify which stage is limiting end-to-end throughput and whether a queue is absorbing bursts or accumulating an unsustainable backlog.
+                        </p>
+                    </div>
+
+                    <!-- Problem Statement Box -->
+                    <div class="p-5 rounded-2xl bg-gradient-to-r from-brand-indigo/10 via-brand-violet/10 to-transparent border border-brand-indigo/30 space-y-2">
+                        <h3 class="text-xs font-bold text-brand-indigo uppercase tracking-wider flex items-center gap-2">
+                            <i class="fa-solid fa-circle-question"></i> 2.1 Problem Statement
+                        </h3>
+                        <p class="text-sm text-slate-200 font-medium italic">
+                            "How can a time-series ingestion pipeline accept a configurable stream of records, process and partition them, form storage-efficient chunks, persist them reliably, and expose enough telemetry to identify overload and bottlenecks?"
+                        </p>
+                    </div>
+
+                    <!-- Objectives List Grid -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-bullseye text-brand-emerald"></i> 2.2 System Objectives
+                        </h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Multi-Stage Pipeline</strong> Model a multi-stage ingestion pipeline with explicit responsibilities for each stage.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Bounded Queueing</strong> Apply bounded queueing to prevent unbounded in-memory accumulation during load spikes.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Record Validation</strong> Validate records dynamically and track accepted versus rejected counts in real time.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Partition Buffering</strong> Buffer records by partition and form chunks using configurable size and time thresholds.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Parquet & SQLite Persistence</strong> Persist completed chunks as Parquet files and record run metadata in SQLite.</div>
+                            </div>
+                            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start gap-3">
+                                <i class="fa-solid fa-check-circle text-brand-emerald mt-0.5"></i>
+                                <div><strong class="text-white block">Telemetry Visualization</strong> Visualize throughput, queue depth, buffer use, chunk activity, and storage outcomes.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 3. SYSTEM ARCHITECTURE (INTERACTIVE DIAGRAMS) -->
+                <section id="architecture" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                                03
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white">3. System Architecture</h2>
+                                <p class="text-xs text-slate-400">Logical data path, subsystem components &amp; interactive flow viewer</p>
+                            </div>
+                        </div>
+
+                        <!-- Diagram View Tabs -->
+                        <div class="flex items-center gap-1 bg-slate-900/80 p-1 rounded-xl border border-slate-800 text-xs">
+                            <button class="arch-tab px-3 py-1.5 rounded-lg active font-semibold text-white bg-brand-indigo shadow transition" data-tab="overview">
+                                Pipeline Overview
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="chunking">
+                                Data Chunking
+                            </button>
+                            <button class="arch-tab px-3 py-1.5 rounded-lg font-semibold text-slate-400 hover:text-white transition" data-tab="projection">
+                                Storage & Telemetry
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Diagram Container -->
+                    <div class="bg-slate-950/80 p-6 rounded-2xl border border-slate-800 relative overflow-hidden min-h-[380px] flex items-center justify-center">
+
+                        <!-- TAB 1: PIPELINE OVERVIEW (Figure 1 in Report) -->
+                        <div id="arch-overview" class="arch-pane w-full space-y-6">
+                            <div class="text-center space-y-1">
+                                <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider">Figure 1. Logical FlowStore Ingestion Architecture</span>
+                                <h3 class="text-base font-bold text-white">Producer &rarr; Ingestion &rarr; Processing &rarr; Persistence</h3>
+                            </div>
+
+                            <!-- Component Layout Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
+                                <!-- Data Source -->
+                                <div class="p-4 rounded-2xl bg-slate-900/90 border border-blue-500/30 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-blue-500/20 pb-2">
+                                        <span class="font-bold text-white flex items-center gap-2">
+                                            <i class="fa-solid fa-gears text-blue-400"></i> DATA SOURCE
+                                        </span>
+                                        <span class="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded">Stage 1</span>
+                                    </div>
+                                    <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center space-y-1">
+                                        <strong class="text-white block">Generator / Clients</strong>
+                                        <span class="text-[10px] text-slate-400">Emits timestamped metric streams at configured rate</span>
+                                    </div>
+                                </div>
+
+                                <!-- Ingestion -->
+                                <div class="p-4 rounded-2xl bg-slate-900/90 border border-violet-500/30 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-violet-500/20 pb-2">
+                                        <span class="font-bold text-white flex items-center gap-2">
+                                            <i class="fa-solid fa-list-ol text-violet-400"></i> INGESTION
+                                        </span>
+                                        <span class="text-[10px] bg-violet-500/20 text-violet-300 px-2 py-0.5 rounded">Stage 2</span>
+                                    </div>
+                                    <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center space-y-1">
+                                        <strong class="text-white block">Bounded Queue</strong>
+                                        <span class="text-[10px] text-slate-400">Manages backpressure &amp; queue depth limits</span>
+                                    </div>
+                                </div>
+
+                                <!-- Processing -->
+                                <div class="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-emerald-500/20 pb-2">
+                                        <span class="font-bold text-white flex items-center gap-2">
+                                            <i class="fa-solid fa-filter text-emerald-400"></i> PROCESSING
+                                        </span>
+                                        <span class="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded">Stage 3</span>
+                                    </div>
+                                    <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center space-y-1">
+                                        <strong class="text-white block">Processor + Buffers</strong>
+                                        <span class="text-[10px] text-slate-400">Validation (accept/reject) &amp; partition grouping</span>
+                                    </div>
+                                </div>
+
+                                <!-- Persistence -->
+                                <div class="p-4 rounded-2xl bg-slate-900/90 border border-amber-500/30 space-y-3">
+                                    <div class="flex items-center justify-between border-b border-amber-500/20 pb-2">
+                                        <span class="font-bold text-white flex items-center gap-2">
+                                            <i class="fa-solid fa-hard-drive text-amber-400"></i> PERSISTENCE
+                                        </span>
+                                        <span class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded">Stage 4</span>
+                                    </div>
+                                    <div class="p-3 bg-slate-950 rounded-xl border border-slate-800 text-center space-y-1">
+                                        <strong class="text-white block">Builder &rarr; Parquet</strong>
+                                        <span class="text-[10px] text-slate-400">Parquet files + SQLite metadata updates</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-center text-[11px] text-slate-400">
+                                UI / Telemetry Layer: React Flow + WebSockets receive real-time engine telemetry independently of storage writes.
+                            </div>
+                        </div>
+
+                        <!-- TAB 2: DATA CHUNKING & COMPRESSION FLOW -->
+                        <div id="arch-chunking" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider block text-center">Partition Buffering &amp; Chunk Lifecycle</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">1</div>
+                                    <div class="font-bold text-white">Record Partitioning</div>
+                                    <div class="text-[11px] text-slate-400">Accepted records grouped by device/tag partition key.</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">2</div>
+                                    <div class="font-bold text-white">Threshold Evaluation</div>
+                                    <div class="text-[11px] text-slate-400">Monitors buffer size count and age threshold.</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-indigo/20 text-brand-indigo font-bold mx-auto flex items-center justify-center">3</div>
+                                    <div class="font-bold text-white">Column Encoding</div>
+                                    <div class="text-[11px] text-slate-400">Converts rows to PyArrow columnar arrays with Snappy/ZSTD.</div>
+                                </div>
+                                <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 text-center space-y-2">
+                                    <div class="w-7 h-7 rounded-full bg-brand-emerald/20 text-brand-emerald font-bold mx-auto flex items-center justify-center">4</div>
+                                    <div class="font-bold text-white">Parquet Write</div>
+                                    <div class="text-[11px] text-slate-400">Persists immutable .parquet file &amp; updates SQLite index.</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- TAB 3: PROJECTION & TELEMETRY -->
+                        <div id="arch-projection" class="arch-pane hidden w-full space-y-4">
+                            <span class="text-xs font-bold text-brand-violet uppercase tracking-wider block text-center">Storage Metadata &amp; UI Telemetry Stream</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                                    <span class="text-brand-violet font-bold block">SQLite Metadata Store</span>
+                                    <p class="text-slate-400">Stores run configurations, file paths, record counts, byte sizes, and execution timestamps for comparison.</p>
+                                </div>
+                                <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                                    <span class="text-brand-cyan font-bold block">WebSocket Telemetry Push</span>
+                                    <p class="text-slate-400">Broadcasting queue depth, backpressure alerts, accepted/rejected rates, and chunk flush events every 100ms.</p>
+                                </div>
+                                <div class="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                                    <span class="text-brand-emerald font-bold block">DuckDB Analytical Queries</span>
+                                    <p class="text-slate-400">Enables high-speed columnar projection and aggregation queries directly over persisted local Parquet files.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Table 1: Component Responsibilities from PDF -->
+                    <div class="space-y-3 pt-4 border-t border-slate-800">
+                        <h3 class="text-sm font-bold text-white">Table 1. Subsystem Component Responsibilities</h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Layer / Component</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Responsibility</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Implementation / Design Role</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">Generator</td>
+                                        <td class="px-4 py-3 text-slate-300">Creates timestamped records and tracks generated count and rate.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">Python ingestion engine thread</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">Bounded Queue</td>
+                                        <td class="px-4 py-3 text-slate-300">Buffers work up to configured capacity; exposes queue depth and pressure.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">In-process queue (Queue policy)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">Processor</td>
+                                        <td class="px-4 py-3 text-slate-300">Validates records and counts accepted/rejected items.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">Python processing stage worker</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">Partition Buffers</td>
+                                        <td class="px-4 py-3 text-slate-300">Groups accepted records by partition key.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">Engine memory buffers</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">Chunk Builder</td>
+                                        <td class="px-4 py-3 text-slate-300">Combines records into write units and tracks flushes.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">Engine chunk lifecycle manager</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">Parquet Writer</td>
+                                        <td class="px-4 py-3 text-slate-300">Serializes completed chunks and reports write outcomes.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">PyArrow / Parquet library</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">Metadata &amp; Storage</td>
+                                        <td class="px-4 py-3 text-slate-300">Tracks runs and files; stores actual output files.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">SQLite metadata &amp; persistent volume</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-white">UI / Telemetry</td>
+                                        <td class="px-4 py-3 text-slate-300">Displays live state, events, run history and experiments.</td>
+                                        <td class="px-4 py-3 text-slate-400 font-mono">React, TypeScript, React Flow, WebSockets</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 4. INGESTION AND CHUNKING WORKFLOW -->
+                <section id="workflow" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-indigo/20 border border-brand-indigo/30 flex items-center justify-center text-brand-indigo font-mono font-bold">
+                            04
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">4. Ingestion and Chunking Workflow</h2>
+                            <p class="text-xs text-slate-400">Processing stages, backpressure control &amp; Parquet serialization</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            The run begins with configuration of record count, target feed rate, chunk size, writer delay, and invalid-record ratio. The generator emits records until the target is reached or the run is stopped. The queue transfers work to the processor. Accepted records enter partition buffers and are collected into chunks according to the engine's implemented rules. Completed chunks are written to Parquet and reflected in storage metadata.
+                        </p>
+                    </div>
+
+                    <!-- Figure 2 Flow Representation -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-3">
+                        <span class="text-xs font-bold text-brand-indigo uppercase tracking-wider block text-center">Figure 2. Record-Processing Flow &amp; Observability Points</span>
+                        <div class="grid grid-cols-2 sm:grid-cols-6 gap-2 text-center text-xs font-mono">
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                <span class="text-brand-indigo font-bold block text-[10px]">1. Generate</span>
+                                <div class="text-white font-semibold">Create Records</div>
+                                <div class="text-[9px] text-slate-400">Rate + Count</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                <span class="text-brand-violet font-bold block text-[10px]">2. Enqueue</span>
+                                <div class="text-white font-semibold">Bounded Queue</div>
+                                <div class="text-[9px] text-slate-400">Depth + Pressure</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                <span class="text-brand-cyan font-bold block text-[10px]">3. Validate</span>
+                                <div class="text-white font-semibold">Accept / Reject</div>
+                                <div class="text-[9px] text-slate-400">Validation Filter</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                <span class="text-brand-emerald font-bold block text-[10px]">4. Buffer</span>
+                                <div class="text-white font-semibold">Partition Records</div>
+                                <div class="text-[9px] text-slate-400">Buffered Count</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                <span class="text-brand-amber font-bold block text-[10px]">5. Chunk</span>
+                                <div class="text-white font-semibold">Build Chunks</div>
+                                <div class="text-[9px] text-slate-400">Flush State</div>
+                            </div>
+                            <div class="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1">
+                                <span class="text-brand-rose font-bold block text-[10px]">6. Persist</span>
+                                <div class="text-white font-semibold">Write Parquet</div>
+                                <div class="text-[9px] text-slate-400">Files + Metadata</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sections 4.2 & 4.3 -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                        <div class="space-y-2">
+                            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-gauge-high text-brand-violet"></i> 4.2 Queueing and Backpressure
+                            </h3>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                A bounded queue limits how much work can wait in memory. If producers generate records faster than downstream stages can consume them, queue depth may rise. When capacity is reached, the system's configured queue policy determines whether producers block or records are rejected.
+                            </p>
+                        </div>
+                        <div class="space-y-2">
+                            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                                <i class="fa-solid fa-file-code text-brand-emerald"></i> 4.3 Chunk Formation &amp; Persistence
+                            </h3>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                Chunking groups records before writing. Larger chunks reduce per-file overhead but increase buffering delay. Smaller chunks become available sooner but create more files and metadata operations. Parquet provides column-oriented analytical efficiency, and SQLite stores run metadata.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. CONCURRENCY, SCALABILITY AND CONSISTENCY -->
+                <section id="concurrency" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-cyan/20 border border-brand-cyan/30 flex items-center justify-center text-brand-cyan font-mono font-bold">
+                            05
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">5. Concurrency, Scalability and Consistency</h2>
+                            <p class="text-xs text-slate-400">Scale-out principles, failure handling matrix, and restart behavior</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            The local virtual lab helps reason about throughput and queueing, but a single-process prototype does not by itself prove distributed scalability. A production design could separate API instances, ingestion workers, metadata storage, and object storage so each tier can scale according to its own workload.
+                        </p>
+                    </div>
+
+                    <!-- Risk / Failure Matrix Table (Table from Section 5.2 in PDF) -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-shield-cat text-brand-amber"></i> Table 2. Risk &amp; Failure Design Matrix
+                        </h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Risk / Failure Scenario</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Design Consideration &amp; Mitigation</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Queue Overload</td>
+                                        <td class="px-4 py-3 text-slate-400">Bounded capacity and explicit queue policy; measure backlog and producer waiting times.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Slow Storage Writer</td>
+                                        <td class="px-4 py-3 text-slate-400">Observe persisted throughput and upstream buffer growth; test supported throttling policies.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Write Failure</td>
+                                        <td class="px-4 py-3 text-slate-400">Track failure counts and ensure failed writes are not reported as persisted items.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Stop During Run</td>
+                                        <td class="px-4 py-3 text-slate-400">Cancel generator and background tasks cleanly; define explicit handling for partial buffer chunks.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Metadata / File Mismatch</td>
+                                        <td class="px-4 py-3 text-slate-400">Verify successful files against metadata database entries and reconcile carefully.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Process / Container Restart</td>
+                                        <td class="px-4 py-3 text-slate-400">Use persistent volume mounts and verify previously written Parquet files remain available.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 6. DATA MODEL AND METRICS -->
+                <section id="datamodel" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            06
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">6. Data Model and Metrics</h2>
+                            <p class="text-xs text-slate-400">Logical schema entities and metric definitions</p>
+                        </div>
+                    </div>
+
+                    <!-- Logical Entities Table (Table from 6.1) -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white">Table 3. Pipeline Logical Entities</h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Entity</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Example Information</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Purpose</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono text-[11px]">
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-indigo">Record</td>
+                                        <td class="px-4 py-3 text-slate-300">Timestamp, dimensions/tags, value or payload</td>
+                                        <td class="px-4 py-3 text-slate-400">Unit of incoming time-series data.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-violet">Partition buffer</td>
+                                        <td class="px-4 py-3 text-slate-300">Partition identifier and buffered records</td>
+                                        <td class="px-4 py-3 text-slate-400">Groups records before chunk formation.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-cyan">Chunk</td>
+                                        <td class="px-4 py-3 text-slate-300">Chunk identifier, record count, status, write timestamp</td>
+                                        <td class="px-4 py-3 text-slate-400">Unit handed to the writer.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-emerald">Parquet file</td>
+                                        <td class="px-4 py-3 text-slate-300">File identifier/path, record count, bytes, status</td>
+                                        <td class="px-4 py-3 text-slate-400">Persisted data artifact.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-amber">Run metadata</td>
+                                        <td class="px-4 py-3 text-slate-300">Run ID, configuration, counts, status, timestamps</td>
+                                        <td class="px-4 py-3 text-slate-400">Supports history and comparison.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Metric Definitions Table (Table from 6.2) -->
+                    <div class="space-y-3 pt-2">
+                        <h3 class="text-sm font-bold text-white">Table 4. Metric Definitions &amp; Interpretation</h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Metric</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Definition / Interpretation</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Generated records</td>
+                                        <td class="px-4 py-3 text-slate-400">Total records emitted by the generator.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Accepted / rejected</td>
+                                        <td class="px-4 py-3 text-slate-400">Records accepted by validation and records rejected, according to engine rules.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Target feed rate</td>
+                                        <td class="px-4 py-3 text-slate-400">Configured requested generation rate; not a guarantee of actual throughput.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Actual throughput</td>
+                                        <td class="px-4 py-3 text-slate-400">Measured records processed or persisted per unit time; stage and interval must be specified.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Queue depth / utilization</td>
+                                        <td class="px-4 py-3 text-slate-400">Current queued items and depth divided by configured capacity.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Buffered records</td>
+                                        <td class="px-4 py-3 text-slate-400">Records currently waiting in partition buffers, as reported by the engine.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Chunk count</td>
+                                        <td class="px-4 py-3 text-slate-400">Number of chunks created or completed; distinguish created from persisted.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Persisted records</td>
+                                        <td class="px-4 py-3 text-slate-400">Records confirmed as written successfully to storage.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-semibold text-white">Storage bytes</td>
+                                        <td class="px-4 py-3 text-slate-400">Reported size of persisted files, with consistent units.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. VIRTUAL-LAB EXPERIMENTS -->
+                <section id="experiments" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-violet/20 border border-brand-violet/30 flex items-center justify-center text-brand-violet font-mono font-bold">
+                            07
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">7. Virtual-Lab Experiments</h2>
+                            <p class="text-xs text-slate-400">Controlled benchmark scenarios &amp; outcome interpretation</p>
+                        </div>
+                    </div>
+
+                    <div class="text-slate-300 text-sm leading-relaxed">
+                        <p>
+                            Experiments should change one main factor at a time and compare the result with a baseline. The purpose is to observe the direction and shape of changes in queue depth, throughput, latency, chunk formation, and persistence.
+                        </p>
+                    </div>
+
+                    <!-- Scenarios Table (Table from 7.1 in PDF) -->
+                    <div class="space-y-3">
+                        <h3 class="text-sm font-bold text-white">Table 5. Recommended Experimental Scenarios</h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">Scenario</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Change / Parameter Adjustment</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">Observe / Interpret</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-indigo">Baseline</td>
+                                        <td class="px-4 py-3 text-slate-300">Moderate offered load and default settings.</td>
+                                        <td class="px-4 py-3 text-slate-400">Throughput, queue depth, buffer use, chunks, and persistence.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-violet">High load</td>
+                                        <td class="px-4 py-3 text-slate-300">Increase target feed rate gradually.</td>
+                                        <td class="px-4 py-3 text-slate-400">Where actual throughput stops keeping pace; queue and buffer trends.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-amber">Slow storage</td>
+                                        <td class="px-4 py-3 text-slate-300">Increase writer delay if supported.</td>
+                                        <td class="px-4 py-3 text-slate-400">Whether persistence lags accepted records and upstream buffers grow.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-rose">Queue saturation</td>
+                                        <td class="px-4 py-3 text-slate-300">Reduce queue capacity and raise offered load.</td>
+                                        <td class="px-4 py-3 text-slate-400">Queue policy, producer blocking or drops, and resulting throughput.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-cyan">Invalid records</td>
+                                        <td class="px-4 py-3 text-slate-300">Increase invalid-record ratio.</td>
+                                        <td class="px-4 py-3 text-slate-400">Rejected count and rejection percentage.</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 font-bold text-brand-emerald">Chunk comparison</td>
+                                        <td class="px-4 py-3 text-slate-300">Run workloads with different chunk sizes.</td>
+                                        <td class="px-4 py-3 text-slate-400">Chunk/file count, bytes, and measured completion delay.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 8. TECHNOLOGY STACK -->
+                <section id="tech-stack" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-amber/20 border border-brand-amber/30 flex items-center justify-center text-brand-amber font-mono font-bold">
+                            08
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">8. Technology Stack</h2>
+                            <p class="text-xs text-slate-400">Implementation tooling &amp; component roles</p>
+                        </div>
+                    </div>
+
+                    <!-- Tech Stack Table (Table from Section 8 in PDF) -->
+                    <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                <tr>
+                                    <th class="px-4 py-3 border-b border-slate-800">Area</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Technology</th>
+                                    <th class="px-4 py-3 border-b border-slate-800">Role &amp; Responsibilities</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-800 bg-slate-950/40">
+                                <tr>
+                                    <td class="px-4 py-3 font-bold text-white">Frontend</td>
+                                    <td class="px-4 py-3 text-brand-indigo font-mono">React, TypeScript, Vite</td>
+                                    <td class="px-4 py-3 text-slate-400">Interactive web interface.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-bold text-white">Canvas</td>
+                                    <td class="px-4 py-3 text-brand-violet font-mono">React Flow (@xyflow/react)</td>
+                                    <td class="px-4 py-3 text-slate-400">Connected pipeline visualization.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-bold text-white">Backend</td>
+                                    <td class="px-4 py-3 text-brand-cyan font-mono">Python, FastAPI</td>
+                                    <td class="px-4 py-3 text-slate-400">Configuration, run control, metrics and storage APIs.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-bold text-white">Live updates</td>
+                                    <td class="px-4 py-3 text-brand-emerald font-mono">WebSockets</td>
+                                    <td class="px-4 py-3 text-slate-400">Pushes run events and current metrics.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-bold text-white">Data Format / Metadata</td>
+                                    <td class="px-4 py-3 text-brand-amber font-mono">PyArrow / Parquet, SQLite</td>
+                                    <td class="px-4 py-3 text-slate-400">Column-oriented persisted records; local run &amp; file metadata.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-bold text-white">Optional Analytics</td>
+                                    <td class="px-4 py-3 text-brand-rose font-mono">DuckDB</td>
+                                    <td class="px-4 py-3 text-slate-400">Local analytical querying where enabled.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-3 font-bold text-white">Deployment</td>
+                                    <td class="px-4 py-3 text-slate-200 font-mono">Docker Compose</td>
+                                    <td class="px-4 py-3 text-slate-400">Repeatable local services and persistent volume.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- 9. FEASIBILITY, ADVANTAGES AND LIMITATIONS -->
+                <section id="feasibility" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            09
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">9. Feasibility, Advantages and Limitations</h2>
+                            <p class="text-xs text-slate-400">Prototype vs Scalable Target comparison</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                        <!-- Advantages -->
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-thumbs-up text-brand-emerald"></i> 9.1 Advantages
+                            </h4>
+                            <ul class="space-y-1.5 text-slate-400 list-disc list-inside">
+                                <li>Separates ingestion into understandable, observable stages.</li>
+                                <li>Makes queueing, processing, chunking, and persistence visible.</li>
+                                <li>Supports controlled workload changes and run comparisons.</li>
+                                <li>Stores output as Parquet and tracks metadata locally.</li>
+                                <li>Provides a foundation for cloud-storage or distributed-worker extensions.</li>
+                            </ul>
+                        </div>
+
+                        <!-- Limitations -->
+                        <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+                            <h4 class="font-bold text-white text-sm flex items-center gap-2">
+                                <i class="fa-solid fa-triangle-exclamation text-brand-amber"></i> 9.2 Limitations &amp; Scope
+                            </h4>
+                            <p class="text-slate-400 leading-relaxed">
+                                Local capacity depends on host hardware. An in-process queue and SQLite store do not establish multi-node durability or distributed consensus. Future extensions require durable brokers and cloud object stores.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Figure 3 Comparison Table -->
+                    <div class="space-y-3 pt-2">
+                        <h3 class="text-sm font-bold text-white">Figure 3. Current Local Lab vs Possible Future Extension</h3>
+                        <div class="overflow-x-auto rounded-2xl border border-slate-800">
+                            <table class="w-full text-left text-xs text-slate-300">
+                                <thead class="bg-slate-900 text-slate-400 uppercase font-mono text-[10px]">
+                                    <tr>
+                                        <th class="px-4 py-3 border-b border-slate-800">CURRENT LOCAL LAB</th>
+                                        <th class="px-4 py-3 border-b border-slate-800">POSSIBLE FUTURE EXTENSION</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-800 bg-slate-950/40 font-mono">
+                                    <tr>
+                                        <td class="px-4 py-3 text-brand-amber">FastAPI + local engine</td>
+                                        <td class="px-4 py-3 text-brand-emerald">Multiple API / worker instances</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-brand-amber">In-process bounded queue</td>
+                                        <td class="px-4 py-3 text-brand-emerald">Durable broker and replay (Kafka/RabbitMQ)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-brand-amber">SQLite metadata</td>
+                                        <td class="px-4 py-3 text-brand-emerald">Distributed metadata service (PostgreSQL/CockroachDB)</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="px-4 py-3 text-brand-amber">Persistent local Parquet files</td>
+                                        <td class="px-4 py-3 text-brand-emerald">Cloud object storage (AWS S3 / Backblaze B2)</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 10. CONCLUSION -->
+                <section id="conclusion" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6">
+                    <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                        <div class="w-10 h-10 rounded-xl bg-brand-emerald/20 border border-brand-emerald/30 flex items-center justify-center text-brand-emerald font-mono font-bold">
+                            10
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">10. Conclusion</h2>
+                            <p class="text-xs text-slate-400">Final engineering summary</p>
+                        </div>
+                    </div>
+
+                    <div class="prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+                        <p>
+                            FlowStore demonstrates the core stages of a time-series ingestion pipeline: generating records, controlling queued work, validating and partitioning records, building chunks, persisting Parquet files, and reporting metadata. Its virtual-lab interface makes these stages easier to inspect and compare under controlled workloads. The local implementation and any future distributed architecture provide different kinds of evidence: local runs demonstrate implemented behavior, while scalability claims require additional testing under realistic deployment conditions.
+                        </p>
+                    </div>
+
+                    <!-- Author Credit Box -->
+                    <div class="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-center justify-between flex-wrap gap-3 text-xs">
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Author / Engineer</span>
+                            <span class="text-white font-bold">Baibhav Pati (Roll 47, D12B)</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Course</span>
+                            <span class="text-slate-200">Software System Design</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400 block text-[10px] uppercase">Status</span>
+                            <span class="text-brand-emerald font-mono font-bold">Virtual Lab Complete</span>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 11. LIVE INTERACTIVE FLOWSTORE SIMULATOR -->
+                <section id="simulator" class="glass-panel rounded-3xl p-6 sm:p-8 space-y-6 border-2 border-brand-indigo/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-4 flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-indigo to-brand-violet text-white flex items-center justify-center font-bold text-lg shadow-glow-indigo">
+                                <i class="fa-solid fa-flask"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                                    FlowStore Interactive Virtual Lab
+                                    <span class="text-xs px-2.5 py-0.5 rounded-full bg-brand-emerald/20 text-brand-emerald font-mono font-semibold">Live Simulator</span>
+                                </h2>
+                                <p class="text-xs text-slate-400">Simulate time-series telemetry generation, queue pressure, partition chunking &amp; Parquet storage</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 text-xs">
+                            <button id="btnRunGenerator" class="px-3.5 py-1.5 rounded-lg bg-brand-indigo hover:bg-indigo-600 text-white font-bold transition shadow-glow-indigo flex items-center gap-1.5">
+                                <i class="fa-solid fa-play"></i> Run Feed Generator
+                            </button>
+                            <button id="simReset" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition">
+                                <i class="fa-solid fa-rotate-left text-brand-rose mr-1"></i> Reset Pipeline
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Form Controls -->
+                    <div class="bg-slate-950 p-5 rounded-2xl border border-slate-800 space-y-4 text-xs">
+                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                            
+                            <!-- Target Ingestion Rate -->
+                            <div class="sm:col-span-4">
+                                <label class="block text-slate-400 mb-1 font-semibold flex justify-between">
+                                    <span>Target Ingestion Rate</span>
+                                    <span id="lblRateVal" class="text-brand-indigo font-mono">10 rec/sec</span>
+                                </label>
+                                <input type="range" id="simRateSlider" min="1" max="50" value="10" class="w-full accent-indigo-500">
+                            </div>
+
+                            <!-- Buffer Chunk Size Threshold -->
+                            <div class="sm:col-span-4">
+                                <label class="block text-slate-400 mb-1 font-semibold flex justify-between">
+                                    <span>Chunk Size Threshold</span>
+                                    <span id="lblChunkVal" class="text-brand-violet font-mono">8 records</span>
+                                </label>
+                                <input type="range" id="simChunkSlider" min="3" max="20" value="8" class="w-full accent-violet-500">
+                            </div>
+
+                            <!-- Compression Algorithm -->
+                            <div class="sm:col-span-4">
+                                <label class="block text-slate-400 mb-1 font-semibold">Parquet Compression</label>
+                                <select id="simCompressCodec" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-indigo">
+                                    <option value="SNAPPY">Snappy (Fast &amp; Balanced)</option>
+                                    <option value="ZSTD">ZSTD (High Compression Ratio)</option>
+                                    <option value="GZIP">GZIP (Legacy Storage)</option>
+                                    <option value="NONE">Uncompressed (Raw Bytes)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Manual Actions -->
+                        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                            <div class="flex items-center gap-2">
+                                <button id="btnFlushChunk" class="px-4 py-2 rounded-xl bg-brand-emerald/20 hover:bg-brand-emerald/30 text-brand-emerald border border-brand-emerald/40 font-bold transition">
+                                    <i class="fa-solid fa-arrow-up-from-bracket mr-1"></i> Flush Current Buffer to Parquet
+                                </button>
+                            </div>
+                            <div class="text-slate-400 font-mono text-[11px]">
+                                Queue Utilization: <span id="simQueueUtil" class="text-brand-emerald font-bold">0% (0 / 50 capacity)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Simulator Output Display Panels -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-xs font-mono">
+                        
+                        <!-- Panel 1: Ingest Ring Buffer -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-indigo flex items-center gap-1.5">
+                                    <i class="fa-solid fa-memory"></i> Partition Buffer
+                                </span>
+                                <span class="text-[10px] text-slate-400">RAM</span>
+                            </div>
+                            <div id="simBufferList" class="space-y-1.5 min-h-[140px] max-h-[160px] overflow-y-auto">
+                                <div class="text-slate-500 text-center text-[11px] pt-10">Buffer empty</div>
+                            </div>
+                            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div id="simBufferBar" class="bg-brand-indigo h-full w-0 transition-all"></div>
+                            </div>
+                        </div>
+
+                        <!-- Panel 2: Parquet Chunks -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-violet flex items-center gap-1.5">
+                                    <i class="fa-solid fa-file-code"></i> Parquet Chunks
+                                </span>
+                                <span class="text-[10px] text-slate-400">Storage</span>
+                            </div>
+                            <div id="simChunkList" class="space-y-1.5 min-h-[140px] max-h-[160px] overflow-y-auto">
+                                <div class="text-slate-500 text-center text-[11px] pt-10">No chunks flushed</div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">PyArrow Columnar</div>
+                        </div>
+
+                        <!-- Panel 3: Storage & Pipeline Metrics -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-emerald flex items-center gap-1.5">
+                                    <i class="fa-solid fa-chart-pie"></i> Metrics Telemetry
+                                </span>
+                                <span class="text-[10px] text-slate-400">Stats</span>
+                            </div>
+                            <div id="simMetricsPanel" class="space-y-1 text-[11px] text-slate-300">
+                                <div><span class="text-slate-500">Total Ingested:</span> <span id="mIngested" class="text-white font-bold">0 rec</span></div>
+                                <div><span class="text-slate-500">Persisted Chunks:</span> <span id="mChunks" class="text-white">0</span></div>
+                                <div><span class="text-slate-500">Uncompressed Size:</span> <span id="mRawBytes" class="text-slate-400">0 B</span></div>
+                                <div><span class="text-slate-500">Compressed Parquet:</span> <span id="mCompBytes" class="text-brand-emerald font-bold">0 B</span></div>
+                                <div><span class="text-slate-500">Savings Ratio:</span> <span id="mRatio" class="text-brand-cyan font-bold">0%</span></div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Live SQLite Index</div>
+                        </div>
+
+                        <!-- Panel 4: Queue Pressure Gauge -->
+                        <div class="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-3 flex flex-col justify-between">
+                            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                                <span class="font-bold text-brand-amber flex items-center gap-1.5">
+                                    <i class="fa-solid fa-sliders"></i> Bounded Queue
+                                </span>
+                                <span class="text-[10px] text-slate-400">Pressure</span>
+                            </div>
+                            <div class="space-y-2 text-[11px]">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">Status:</span>
+                                    <span id="simQueueStatus" class="text-brand-emerald font-bold">NORMAL</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">Backpressure:</span>
+                                    <span id="simBackpressure" class="text-slate-300">None</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">Accepted:</span>
+                                    <span id="mAccepted" class="text-brand-emerald font-bold">0</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-400">Rejected:</span>
+                                    <span id="mRejected" class="text-brand-rose font-bold">0</span>
+                                </div>
+                            </div>
+                            <div class="text-[10px] text-slate-500 text-right">Bounded Queue Engine</div>
+                        </div>
+                    </div>
+
+                    <!-- Execution Trace Log -->
+                    <div class="p-4 rounded-2xl bg-slate-950 border border-slate-800 space-y-2 font-mono text-xs">
+                        <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+                            <span class="text-slate-400 font-bold flex items-center gap-2">
+                                <i class="fa-solid fa-terminal text-brand-emerald"></i> Ingestion Engine Stream &amp; WebSocket Telemetry Log
+                            </span>
+                            <span class="text-[10px] text-slate-500">Real-time Terminal</span>
+                        </div>
+                        <div id="simTraceLog" class="min-h-[100px] max-h-[140px] overflow-y-auto space-y-1 text-slate-300">
+                            <div class="text-slate-500 italic">FlowStore engine ready. Click "Run Feed Generator" to start processing records.</div>
+                        </div>
+                    </div>
+                </section>
+
+            </main>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 relative z-10 text-xs text-slate-400">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-6 h-6 rounded-lg bg-brand-indigo flex items-center justify-center text-white font-bold font-mono text-xs">F</div>
+                <span class="text-slate-300 font-semibold">Time-Series Storage &amp; Ingestion Pipeline (FlowStore)</span>
+            </div>
+            <div class="text-slate-400">
+                Author: Baibhav Pati (Roll 47, D12B) • Software System Design
+            </div>
+            <div>
+                <a href="#hero" class="text-brand-indigo hover:text-white transition flex items-center gap-1">
+                    Back to Top <i class="fa-solid fa-arrow-up"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC FOR SIMULATOR & NAVIGATION -->
+    <script>
+        // --- 1. SCROLLSPY & READING PROGRESS BAR ---
+        window.addEventListener('scroll', () => {
+            const winScroll = document.body.scrollTop || document.documentElement.scrollTop;
+            const height = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrolled = (winScroll / height) * 100;
+            document.getElementById('scrollProgress').style.width = scrolled + '%';
+
+            const sections = document.querySelectorAll('section[id]');
+            let current = '';
+            sections.forEach(sec => {
+                const top = sec.offsetTop - 120;
+                if (winScroll >= top) current = sec.getAttribute('id');
+            });
+
+            document.querySelectorAll('.toc-link').forEach(link => {
+                link.classList.remove('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('text-brand-indigo', 'font-bold', 'bg-slate-800/50');
+                }
+            });
+        });
+
+        // --- 2. MOBILE TOC DRAWER TOGGLE ---
+        const mobileTocBtn = document.getElementById('mobileTocBtn');
+        const closeTocBtn = document.getElementById('closeTocBtn');
+        const mobileTocDrawer = document.getElementById('mobileTocDrawer');
+
+        mobileTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.remove('hidden'));
+        closeTocBtn?.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        document.querySelectorAll('.mobile-toc-link').forEach(l => {
+            l.addEventListener('click', () => mobileTocDrawer.classList.add('hidden'));
+        });
+
+        // --- 3. ARCHITECTURE DIAGRAM TABS ---
+        document.querySelectorAll('.arch-tab').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.arch-tab').forEach(b => {
+                    b.classList.remove('active', 'bg-brand-indigo', 'text-white');
+                    b.classList.add('text-slate-400');
+                });
+                btn.classList.add('active', 'bg-brand-indigo', 'text-white');
+                btn.classList.remove('text-slate-400');
+
+                const tab = btn.getAttribute('data-tab');
+                document.querySelectorAll('.arch-pane').forEach(p => p.classList.add('hidden'));
+                document.getElementById('arch-' + tab).classList.remove('hidden');
+            });
+        });
+
+        // --- 4. LIVE IN-PAGE SEARCH ---
+        const searchInput = document.getElementById('searchInput');
+        const clearSearch = document.getElementById('clearSearch');
+
+        searchInput.addEventListener('input', (e) => {
+            const val = e.target.value.toLowerCase().trim();
+            clearSearch.classList.toggle('hidden', val.length === 0);
+        });
+
+        clearSearch.addEventListener('click', () => {
+            searchInput.value = '';
+            clearSearch.classList.add('hidden');
+        });
+
+        // --- 5. FLOWSTORE INGESTION & PARQUET CHUNKING SIMULATOR ---
+        class FlowStoreSimulator {
+            constructor() {
+                this.isRunning = false;
+                this.timer = null;
+                this.queueCapacity = 50;
+                this.buffer = [];
+                this.chunks = [];
+                this.totalIngested = 0;
+                this.totalAccepted = 0;
+                this.totalRejected = 0;
+                this.totalRawBytes = 0;
+                this.totalCompressedBytes = 0;
+                this.chunkCounter = 1;
+                this.traceLogs = [];
+
+                this.compressionRatios = {
+                    SNAPPY: 0.35,
+                    ZSTD: 0.22,
+                    GZIP: 0.28,
+                    NONE: 1.0
+                };
+            }
+
+            logTrace(msg, type = 'info') {
+                const time = new Date().toLocaleTimeString().split(' ')[0];
+                let colorClass = 'text-slate-300';
+                if (type === 'success') colorClass = 'text-brand-emerald font-semibold';
+                if (type === 'warn') colorClass = 'text-brand-amber';
+                if (type === 'error') colorClass = 'text-brand-rose';
+                if (type === 'step') colorClass = 'text-brand-indigo font-mono';
+
+                this.traceLogs.unshift(`<div class="${colorClass}">[${time}] ${msg}</div>`);
+                if (this.traceLogs.length > 30) this.traceLogs.pop();
+                this.renderUI();
+            }
+
+            tick() {
+                const rate = parseInt(document.getElementById('simRateSlider').value, 10);
+                const chunkThreshold = parseInt(document.getElementById('simChunkSlider').value, 10);
+                const codec = document.getElementById('simCompressCodec').value;
+
+                // Simulate batch emission
+                const batchSize = Math.max(1, Math.floor(rate / 3));
+                for (let i = 0; i < batchSize; i++) {
+                    this.totalIngested++;
+
+                    // Sim 5% invalid records
+                    if (Math.random() < 0.05) {
+                        this.totalRejected++;
+                        this.logTrace(`VALIDATION REJECTED: Malformed telemetry record #${this.totalIngested}`, 'error');
+                        continue;
+                    }
+
+                    // Check queue overflow
+                    if (this.buffer.length >= this.queueCapacity) {
+                        this.totalRejected++;
+                        this.logTrace(`QUEUE OVERFLOW: Queue capacity (${this.queueCapacity}) reached. Dropping record!`, 'warn');
+                        continue;
+                    }
+
+                    this.totalAccepted++;
+                    const rec = {
+                        id: this.totalIngested,
+                        ts: Date.now(),
+                        device: `dev-${(this.totalIngested % 4) + 1}`,
+                        val: (Math.random() * 100).toFixed(2)
+                    };
+                    this.buffer.push(rec);
+                }
+
+                // Check chunk auto-flush
+                if (this.buffer.length >= chunkThreshold) {
+                    this.flushChunk(codec);
+                }
+
+                this.renderUI();
+            }
+
+            flushChunk(codec = 'SNAPPY') {
+                if (this.buffer.length === 0) {
+                    return this.logTrace('Flush skipped: Partition buffer is empty.', 'info');
+                }
+
+                const recCount = this.buffer.length;
+                const rawBytes = recCount * 64; // ~64 bytes per row
+                const compRatio = this.compressionRatios[codec] || 0.35;
+                const compBytes = Math.round(rawBytes * compRatio);
+
+                const chunk = {
+                    id: `chunk-${String(this.chunkCounter++).padStart(4, '0')}.parquet`,
+                    rows: recCount,
+                    rawBytes,
+                    compBytes,
+                    codec,
+                    ts: new Date().toLocaleTimeString()
+                };
+
+                this.chunks.push(chunk);
+                this.totalRawBytes += rawBytes;
+                this.totalCompressedBytes += compBytes;
+                this.buffer = [];
+
+                this.logTrace(`FLUSH SUCCESSFUL &rarr; Created '${chunk.id}' (${recCount} rows, ${compBytes} B using ${codec})`, 'success');
+                this.renderUI();
+            }
+
+            toggleGenerator() {
+                this.isRunning = !this.isRunning;
+                const btn = document.getElementById('btnRunGenerator');
+
+                if (this.isRunning) {
+                    btn.className = 'px-3.5 py-1.5 rounded-lg bg-brand-rose hover:bg-rose-600 text-white font-bold transition shadow-glow-indigo flex items-center gap-1.5';
+                    btn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Feed Generator';
+                    this.timer = setInterval(() => this.tick(), 400);
+                    this.logTrace('FEED GENERATOR STARTED: Emitting live telemetry records...', 'step');
+                } else {
+                    btn.className = 'px-3.5 py-1.5 rounded-lg bg-brand-indigo hover:bg-indigo-600 text-white font-bold transition shadow-glow-indigo flex items-center gap-1.5';
+                    btn.innerHTML = '<i class="fa-solid fa-play"></i> Run Feed Generator';
+                    clearInterval(this.timer);
+                    this.logTrace('FEED GENERATOR PAUSED.', 'warn');
+                }
+            }
+
+            reset() {
+                if (this.isRunning) this.toggleGenerator();
+                this.buffer = [];
+                this.chunks = [];
+                this.totalIngested = 0;
+                this.totalAccepted = 0;
+                this.totalRejected = 0;
+                this.totalRawBytes = 0;
+                this.totalCompressedBytes = 0;
+                this.chunkCounter = 1;
+                this.traceLogs = [];
+                this.logTrace('FlowStore Pipeline reset to initial clean state.', 'info');
+            }
+
+            renderUI() {
+                // Buffer List & Capacity Bar
+                const bufList = document.getElementById('simBufferList');
+                const bufBar = document.getElementById('simBufferBar');
+                const chunkThreshold = parseInt(document.getElementById('simChunkSlider').value, 10);
+
+                bufBar.style.width = `${Math.min(100, (this.buffer.length / chunkThreshold) * 100)}%`;
+
+                if (this.buffer.length === 0) {
+                    bufList.innerHTML = `<div class="text-slate-500 text-center text-[11px] pt-8">Buffer empty</div>`;
+                } else {
+                    bufList.innerHTML = this.buffer.map(r => `
+                        <div class="p-1 rounded bg-slate-800 border border-slate-700/60 flex items-center justify-between text-[10px]">
+                            <span class="text-white font-bold">#${r.id} ${r.device}</span>
+                            <span class="text-brand-emerald font-mono">${r.val}</span>
+                        </div>
+                    `).join('');
+                }
+
+                // Chunks List
+                const chunkList = document.getElementById('simChunkList');
+                if (this.chunks.length === 0) {
+                    chunkList.innerHTML = `<div class="text-slate-500 text-center text-[11px] pt-8">No chunks flushed</div>`;
+                } else {
+                    chunkList.innerHTML = [...this.chunks].reverse().map(c => `
+                        <div class="p-1.5 rounded bg-slate-800 border border-slate-700/80 space-y-0.5 text-[10px]">
+                            <div class="flex items-center justify-between">
+                                <span class="text-brand-violet font-bold">${c.id}</span>
+                                <span class="text-[9px] px-1 py-0.2 rounded bg-brand-violet/20 text-brand-violet font-bold">${c.codec}</span>
+                            </div>
+                            <div class="text-slate-400">${c.rows} rows • ${c.compBytes} B</div>
+                        </div>
+                    `).join('');
+                }
+
+                // Metrics
+                document.getElementById('mIngested').innerText = `${this.totalIngested} rec`;
+                document.getElementById('mChunks').innerText = this.chunks.length;
+                document.getElementById('mRawBytes').innerText = `${this.totalRawBytes} B`;
+                document.getElementById('mCompBytes').innerText = `${this.totalCompressedBytes} B`;
+                document.getElementById('mAccepted').innerText = this.totalAccepted;
+                document.getElementById('mRejected').innerText = this.totalRejected;
+
+                const savings = this.totalRawBytes > 0 
+                    ? (((this.totalRawBytes - this.totalCompressedBytes) / this.totalRawBytes) * 100).toFixed(1) 
+                    : 0;
+                document.getElementById('mRatio').innerText = `${savings}% Saved`;
+
+                // Queue Gauge & Status
+                const qUtil = Math.round((this.buffer.length / this.queueCapacity) * 100);
+                document.getElementById('simQueueUtil').innerText = `${qUtil}% (${this.buffer.length} / ${this.queueCapacity} capacity)`;
+                
+                const qStatus = document.getElementById('simQueueStatus');
+                const bpStatus = document.getElementById('simBackpressure');
+                if (qUtil > 80) {
+                    qStatus.innerText = 'CRITICAL';
+                    qStatus.className = 'text-brand-rose font-bold animate-pulse';
+                    bpStatus.innerText = 'HIGH BACKPRESSURE';
+                    bpStatus.className = 'text-brand-rose font-bold';
+                } else if (qUtil > 40) {
+                    qStatus.innerText = 'MODERATE';
+                    qStatus.className = 'text-brand-amber font-bold';
+                    bpStatus.innerText = 'Light Throttling';
+                    bpStatus.className = 'text-brand-amber';
+                } else {
+                    qStatus.innerText = 'NORMAL';
+                    qStatus.className = 'text-brand-emerald font-bold';
+                    bpStatus.innerText = 'None';
+                    bpStatus.className = 'text-slate-300';
+                }
+
+                // Trace Logs
+                document.getElementById('simTraceLog').innerHTML = this.traceLogs.join('');
+            }
+        }
+
+        // Initialize Simulator Engine
+        const flowSim = new FlowStoreSimulator();
+
+        document.getElementById('simRateSlider').addEventListener('input', (e) => {
+            document.getElementById('lblRateVal').innerText = `${e.target.value} rec/sec`;
+        });
+
+        document.getElementById('simChunkSlider').addEventListener('input', (e) => {
+            document.getElementById('lblChunkVal').innerText = `${e.target.value} records`;
+        });
+
+        document.getElementById('btnRunGenerator').addEventListener('click', () => flowSim.toggleGenerator());
+        document.getElementById('btnFlushChunk').addEventListener('click', () => {
+            const codec = document.getElementById('simCompressCodec').value;
+            flowSim.flushChunk(codec);
+        });
+        document.getElementById('simReset').addEventListener('click', () => flowSim.reset());
+    </script>
+</body>
+</html>

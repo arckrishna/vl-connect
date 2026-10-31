@@ -395,7 +395,7 @@ export default function Home() {
             </span>
             <span className="hidden lg:inline text-white/50">|</span>
             <span className="hidden lg:inline text-white/80">
-              Affiliated to University of Mumbai • Approved by AICTE • NAAC &apos;A+&apos; Grade
+              Affiliated to University of Mumbai • Approved by AICTE • NAAC &apos;A&apos; Grade
             </span>
           </div>
           <div className="flex items-center gap-4 text-white/90">
@@ -553,7 +553,7 @@ export default function Home() {
               <span className="w-2 h-2 rounded-full bg-amber-400"></span>
               <span>VESIT Department of Computer Engineering</span>
               <span className="text-white/40">•</span>
-              <span className="text-white/80">Batch 2025–2026</span>
+              <span className="text-white/80">Batch 2026–2027</span>
             </div>
 
             {/* Main Headline */}
@@ -1325,7 +1325,7 @@ export default function Home() {
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-                Curriculum design, technical review, and distributed systems project mentorship.
+                Curriculum Design, Technical Review and Software System Design Project Mentorship.
               </p>
             </div>
           </div>
@@ -1565,7 +1565,7 @@ export default function Home() {
               <p className="text-xs text-white/70 max-w-md leading-relaxed">
                 <strong className="text-white">Vivekanand Education Society&apos;s Institute of Technology (VESIT)</strong> was established in 1984.
                 An Autonomous Institute affiliated to the University of Mumbai, approved by AICTE,
-                and accredited with &apos;A+&apos; Grade by NAAC.
+                and accredited with &apos;A&apos; Grade by NAAC.
               </p>
               <div className="text-xs text-amber-200/90 font-serif italic">
                 &ldquo;Education is the manifestation of the perfection already in man.&rdquo; — Swami Vivekananda
@@ -1644,7 +1644,7 @@ export default function Home() {
               © 2026 VESIT DesignSphere • Department of Computer Engineering • Vivekanand Education Society&apos;s Institute of Technology
             </p>
             <p className="text-[11px] text-white/40">
-              NAAC &apos;A+&apos; Accredited Autonomous Engineering Institute
+              NAAC &apos;A&apos; Accredited Autonomous Engineering Institute
             </p>
           </div>
         </div>
