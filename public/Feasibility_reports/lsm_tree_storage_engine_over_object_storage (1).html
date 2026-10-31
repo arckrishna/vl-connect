@@ -33,6 +33,15 @@ th{background:#edf2ff;color:#263d73;font-weight:700} tr:last-child td{border-bot
 footer{text-align:center;color:var(--muted);font-size:.85rem;padding:20px}
 @media(max-width:850px){.layout{grid-template-columns:1fr}nav{position:static}nav div{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px}section.card{padding:24px 20px}}
 @media(max-width:480px){.hero{padding:46px 20px}nav div{grid-template-columns:1fr}}
+
+/* Justified alignment for narrative text */
+p, li {
+    text-align: justify;
+    text-justify: inter-word;
+}
+header p, nav p, footer p, .kicker, .eyebrow, button, td, th {
+    text-align: left;
+}
 </style>
 </head>
 <body>

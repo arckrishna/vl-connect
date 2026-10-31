@@ -35,6 +35,15 @@ figcaption{font-size:.82rem;color:var(--muted);padding:9px 4px 1px}
 .table-image{max-width:100%;height:auto}
 footer{text-align:center;color:var(--muted);font-size:.85rem;padding:0 20px 32px}
 @media(max-width:920px){.layout{grid-template-columns:1fr}nav{position:relative;top:auto;max-height:none}nav a{display:inline-block;margin:2px}section.card{padding:21px 18px}}
+
+/* Justified alignment for narrative text */
+p, li {
+    text-align: justify;
+    text-justify: inter-word;
+}
+header p, nav p, footer p, .kicker, .eyebrow, button, td, th {
+    text-align: left;
+}
 </style>
 </head>
 <body>

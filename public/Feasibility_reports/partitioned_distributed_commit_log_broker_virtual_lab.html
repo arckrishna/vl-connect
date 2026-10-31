@@ -30,6 +30,15 @@ summary{cursor:pointer;color:var(--accent);font-weight:650}
 .original-page img{display:block;width:100%;height:auto;margin:16px auto 0;border:1px solid var(--line);border-radius:8px}
 footer{text-align:center;color:var(--muted);font-size:.85rem;padding:0 20px 32px}
 @media(max-width:820px){.layout{grid-template-columns:1fr}nav{position:relative;top:auto;max-height:none}nav a{display:inline-block;margin:2px}.page-card{padding:21px 18px}}
+
+/* Justified alignment for narrative text */
+p, li {
+    text-align: justify;
+    text-justify: inter-word;
+}
+header p, nav p, footer p, .kicker, .eyebrow, button, td, th {
+    text-align: left;
+}
 </style>
 </head>
 <body>

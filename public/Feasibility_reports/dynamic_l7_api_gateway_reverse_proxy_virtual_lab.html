@@ -19,6 +19,15 @@ h2{font-size:21px;line-height:1.3;margin:0}h3{font-size:16px;color:#24466e;margi
 footer{text-align:center;color:#8996a8;font-size:12px;padding:10px 0 22px}
 @media(max-width:950px){.layout{grid-template-columns:1fr;padding:15px;gap:16px}aside{position:static}nav{display:flex;overflow-x:auto;max-height:none;padding-bottom:4px}nav a{white-space:nowrap}.hero{padding:30px 25px}}
 @media(max-width:600px){.card{padding:20px 17px}}
+
+/* Justified alignment for narrative text */
+p, li {
+    text-align: justify;
+    text-justify: inter-word;
+}
+header p, nav p, footer p, .kicker, .eyebrow, button, td, th {
+    text-align: left;
+}
 </style></head><body><div class="layout">
 <aside><div class="brand">System Design Mini Project · Group 21</div><h2>Dynamic L7 API Gateway &amp; Reverse Proxy</h2><nav aria-label="Sections"><a href="#overview">Executive Summary</a><a href="#background">Introduction and Background</a><a href="#problem">Problem Statement</a><a href="#scope">Objectives and Scope</a><a href="#capabilities">Proposed Solution and Key Capabilities</a><a href="#technical">Technical Feasibility</a><a href="#economic">Economic Feasibility</a><a href="#operational">Operational Feasibility</a><a href="#schedule">Schedule Feasibility</a><a href="#security">Legal, Ethical and Security Feasibility</a><a href="#risks">Risk Analysis and Mitigation</a><a href="#alternatives">Alternatives Considered</a><a href="#validation">Validation and Testing Plan</a><a href="#assumptions">Assumptions and Constraints</a><a href="#conclusion">Conclusion and Recommendation</a><a href="#references">References</a></nav></aside>
 <main><header class="hero"><div class="kicker">Feasibility Report · Group 21</div><h1>Dynamic L7 API Gateway &amp; Reverse Proxy</h1><p>A secure, dynamically configurable entry point for web, mobile and external clients accessing private backend services.</p><span class="tag">Cloud Compute Instances · Secret Manager</span></header>

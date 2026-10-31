@@ -22,6 +22,15 @@ h2{font-size:21px;line-height:1.3;margin:0}h3{font-size:16px;margin:20px 0 8px;c
 footer{text-align:center;color:#8996a8;font-size:12px;padding:10px 0 22px}
 @media(max-width:950px){.shell{grid-template-columns:1fr;padding:15px}aside{position:static}nav{display:flex;overflow-x:auto;max-height:none}nav a{white-space:nowrap}.hero{padding:30px 25px}}
 @media(max-width:600px){.card{padding:20px 17px}.state-grid{grid-template-columns:1fr 1fr}}
+
+/* Justified alignment for narrative text */
+p, li {
+    text-align: justify;
+    text-justify: inter-word;
+}
+header p, nav p, footer p, .kicker, .eyebrow, button, td, th {
+    text-align: left;
+}
 </style></head><body><div class="shell">
 <aside><div class="brand">Advanced Cloud System Software Design</div><h2>ActorLab – Actor Model Runtime on Kubernetes</h2><nav>
 <a href="#overview">Case study overview</a><a href="#motivation">Problem motivation</a><a href="#goals">Goals &amp; non-goals</a><a href="#technology">Technology mapping</a><a href="#architecture">System architecture</a><a href="#components">Component responsibilities</a><a href="#abstraction">Actor abstraction layer</a><a href="#data-model">Core data model</a><a href="#lifecycle">Actor lifecycle</a><a href="#semantics">Consistency &amp; delivery</a><a href="#pathways">Data &amp; control pathways</a><a href="#write">Client write path</a><a href="#read">Client read path</a><a href="#background">Background control paths</a><a href="#scaling">Scaling &amp; migration</a><a href="#boundaries">Network boundaries</a><a href="#failures">Failure strategy</a><a href="#edge">Edge cases</a><a href="#summary">Summary</a>

@@ -116,6 +116,15 @@
     
         html { scroll-behavior: smooth; }
         section[id] { scroll-margin-top: 80px; }
+    
+        /* Justified alignment for narrative text */
+        p, li {
+            text-align: justify;
+            text-justify: inter-word;
+        }
+        header p, nav p, footer p, .toc-link, .mobile-toc-link, button, .btn, td, th {
+            text-align: left;
+        }
     </style>
 </head>
 <body class="bg-darkbg text-slate-300 font-sans antialiased selection:bg-brand-indigo/30 selection:text-indigo-200 min-h-screen relative overflow-x-hidden bg-grid-pattern">
